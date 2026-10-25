@@ -1,0 +1,2272 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+    <title>WORD RACE</title>
+    <link rel="stylesheet" href="vendor/fontawesome/css/all.min.css">
+    <style>
+        /* [수정] 상단 네비게이션 버튼: pick the word 게임과 동일한 glass-pill 스타일/아이콘으로 통일 */
+        .glass-pill {
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(8px);
+            box-shadow: 0 4px 14px rgba(100, 120, 180, 0.15);
+        }
+        #nav-left-group, #nav-right-group {
+            position: fixed;
+            top: 18px;
+            z-index: 1000000;
+            display: flex;
+            gap: 10px;
+        }
+        #nav-left-group { left: 18px; transform-origin: top left; }
+        #nav-right-group { right: 18px; transform-origin: top right; }
+        .nav-icon-btn {
+            width: 52px;
+            height: 52px;
+            border-radius: 9999px;
+            border: 2px solid rgba(255,255,255,0.85);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 22px;
+            color: #3b3a66;
+            flex-shrink: 0;
+            transition: transform 0.15s ease;
+        }
+        .nav-icon-btn:hover { transform: translateY(-2px); }
+        .nav-icon-btn:disabled { opacity: 0.35; cursor: default; pointer-events: none; transform: none; }
+
+        /* Tailwind CDN을 쓰던 자리. 실제로 쓰는 유틸리티 클래스만 로컬로 옮겨서
+           외부망이 막힌 학교망에서도 레이아웃이 깨지지 않게 한다. */
+        .text-center { text-align: center; }
+        .mt-2 { margin-top: 0.5rem; }
+        .mb-2 { margin-bottom: 0.5rem; }
+        .mb-3 { margin-bottom: 0.75rem; }
+        .text-5xl { font-size: 3rem; line-height: 1; }
+        .text-2xl { font-size: 1.5rem; line-height: 2rem; }
+        .text-xl { font-size: 1.25rem; line-height: 1.75rem; }
+        .font-medium { font-weight: 500; }
+        .font-black { font-weight: 900; }
+        .w-full { width: 100%; }
+        .flex { display: flex; }
+        .flex-col { flex-direction: column; }
+        .items-center { align-items: center; }
+        .gap-3 { gap: 0.75rem; }
+        .grid { display: grid; }
+        .grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+        .max-w-\[980px\] { max-width: 980px; }
+
+        /* 키보드로 이동할 때 어디가 선택됐는지 보이도록 */
+        button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
+            outline: 3px solid #2563eb;
+            outline-offset: 2px;
+        }
+    </style>
+    <style>
+        /* 전체 게임 통일 폰트: 학교안심 보드마카체(BoardmarkerR, 본문/UI용)와
+           포스터체(PosterB, 굵은 제목용). 자체 호스팅하므로 외부망이 막힌 환경에서도
+           깨지지 않는다. 하나의 family 안에서 font-weight로 두 폰트를 구분해 쓴다. */
+        @font-face {
+            font-family: 'Hakgyoansim';
+            src: url('fonts/Hakgyoansim_BoardmarkerR.ttf') format('truetype');
+            font-weight: 400;
+            font-style: normal;
+            font-display: swap;
+        }
+        @font-face {
+            font-family: 'Hakgyoansim';
+            src: url('fonts/Hakgyoansim_PosterB.ttf') format('truetype');
+            font-weight: 700;
+            font-style: normal;
+            font-display: swap;
+        }
+        * {
+            box-sizing: border-box;
+        }
+        :root {
+            --bg-color: #f8fafc;
+            --text-color: #1e293b;
+            --f-cute: 'Hakgyoansim','Segoe UI Rounded',system-ui,'Malgun Gothic',sans-serif;
+            --f-num: 'Hakgyoansim','Segoe UI Rounded',system-ui,'Malgun Gothic',sans-serif;
+            --t-red:#F0604F; --t-yellow:#E6A62A; --t-green:#63B646;
+            --t-blue:#3592DE; --t-purple:#9068D2; --t-pink:#E56AA6;
+            --r-pill: 999px; --r-xl: 28px; --r-lg: 20px;
+        }
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            background: #f0f9ff;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-family: var(--f-cute);
+        }
+        .hanging-indent {
+            padding-left: 22px; 
+            text-indent: -22px; 
+            line-height: 1.6;
+            word-break: keep-all;
+        }
+        .game-container {
+            /* 예전 4:3에 가까운 비율(1200x900)이 답답하고 세로로 눌린 느낌을 준다는 피드백에 따라
+               더 여유로운 와이드 비율(1400x820)로 변경. 배경 이미지는 background-size:100% 100%로
+               항상 컨테이너에 맞춰 늘어나므로 별도 이미지 교체 없이도 이 비율 변경이 반영된다. */
+            width: 1400px;
+            height: 820px;
+            /* fixed 여야 한다: absolute 이면 1400px 원본 크기가 문서 폭을 넓혀, 휴대폰 브라우저가
+               화면을 통째로 축소하고 innerWidth 도 부풀어 게임판이 넓어진 채로 굳는다 (다른 게임과 동일하게 fixed) */
+            position: fixed;
+            /* 실제 위치는 resizeGame()이 상단 띠 아래 공간의 가운데로 잡는다 */
+            top: 50%;
+            left: 50%;
+            transform-origin: center center;
+            transform: translate(-50%, -50%) scale(1); 
+            border: 8px solid #ffffff; 
+            border-radius: 16px; 
+            background-image: url('0.png');
+            background-size: 100% 100%;
+            background-position: center;
+            background-repeat: no-repeat;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            transition: transform 0.2s ease-out;
+            box-sizing: border-box;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .menu-buttons {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            padding: 20px;
+            width: 100%;
+            margin-top: auto;      
+        }
+
+        /* 대분류/소분류 통합 선택 버튼 스타일 */
+        .selection-heading {
+            font-family: var(--f-cute);
+            font-size: 2.4rem;
+            font-weight: 800;
+            letter-spacing: 0.5px;
+            color: #ffffff;
+            margin-bottom: 25px;
+            text-shadow: -2px -2px 0 #1E5FC0, 2px -2px 0 #1E5FC0, -2px 2px 0 #1E5FC0, 2px 2px 0 #1E5FC0, 0 6px 14px rgba(20,66,140,0.4);
+            text-align: center;
+        }
+        .grid-menu {
+            display: grid;
+            grid-template-columns: repeat(3, 200px);
+            gap: 20px;
+            justify-content: center;
+            width: 100%;
+            margin-bottom: 20px;
+        }
+.menu-box-btn {
+            font-family: var(--f-cute);
+            background: linear-gradient(180deg, #5AA3EF 0%, #1E5FC0 100%);
+            border: 4px solid #ffffff;
+            border-radius: 32px;
+            padding: 15px 10px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: #ffffff;
+            box-shadow: 0 6px 0 #14428c, 0 10px 18px rgba(20,66,140,0.3);
+            cursor: pointer;
+            transition: all 0.15s cubic-bezier(.34,1.56,.64,1);
+            box-sizing: border-box;
+            position: relative;
+
+            /* ──────── [크기 및 정사각형 조절 핵심 부분] ──────── */
+            width: 180px;               /* 1. 원하는 가로 크기를 px로 지정하세요 (예: 160px, 180px 등) */
+            min-width: 0;                /* 긴 영단어 하나 때문에 버튼 폭이 180px보다 넓어지는 것을 방지 */
+            overflow-wrap: break-word;   /* 긴 단어는 박스 안에서 줄바꿈되도록 처리 */
+            aspect-ratio: 1 / 0.8;        /* 2. 가로세로 비율을 1:1로 맞춰 항상 정사각형이 되도록 고정합니다 */
+            /* 기존 height: 90px; 은 자동으로 비율을 맞추기 위해 과감히 지워줍니다! */
+            /* ────────────────────────────────────────────────── */
+        }
+        .menu-box-btn:hover {
+            transform: translateY(-3px) scale(1.03);
+            box-shadow: 0 9px 0 #14428c, 0 14px 22px rgba(20,66,140,0.35);
+            z-index: 30;
+        }
+        .word-tooltip {
+            position: absolute;
+            bottom: calc(100% + 14px);
+            left: 50%;
+            transform: translateX(-50%) translateY(6px);
+            background: #14428c;
+            color: #ffffff;
+            font-family: var(--f-cute);
+            font-weight: 600;
+            font-size: 0.95rem;
+            line-height: 1.5;
+            padding: 12px 16px;
+            border-radius: 18px;
+            border: 3px solid #ffffff;
+            box-shadow: 0 10px 22px rgba(31,58,110,0.35);
+            width: max-content;
+            max-width: 260px;
+            white-space: normal;
+            text-align: center;
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+            transition: opacity 0.15s ease, transform 0.15s ease;
+            z-index: 50;
+        }
+        .word-tooltip::after {
+            content: '';
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            border-width: 8px;
+            border-style: solid;
+            border-color: #14428c transparent transparent transparent;
+        }
+        .menu-box-btn:hover .word-tooltip {
+            opacity: 1;
+            visibility: visible;
+            transform: translateX(-50%) translateY(0);
+        }
+        .menu-box-btn.active {
+            background: linear-gradient(180deg, #ffe08a 0%, #fbbf24 100%) !important;
+            border-color: #ffffff !important;
+            box-shadow: 0 4px 0 #d97706 !important;
+            color: #7a4e00 !important;
+            transform: translateY(2px) scale(1.02);
+        }
+        .menu-box-btn span {
+            font-size: 0.9rem;
+            color: #eaf3ff;
+            font-weight: 500;
+            margin-top: 4px;
+        }
+        .menu-box-btn.active span {
+            color: #7a4e00;
+        }
+        .menu-box-btn.full-width {
+            width: 100%;
+            max-width: 640px; 
+            height: 70px;
+            padding: 10px 20px;
+            border-radius: var(--r-pill);
+            flex-direction: row;
+            gap: 10px;
+            margin: 0 auto 15px auto; 
+        }
+        .status-counter {
+            font-family: var(--f-cute);
+            font-size: 1.4rem;
+            font-weight: 600;
+            color: #1E5FC0;
+            margin-bottom: 15px;
+            background: #ffffff;
+            padding: 6px 22px;
+            border-radius: var(--r-pill);
+            border: 3px solid #BFDBFE;
+            box-shadow: 0 3px 8px rgba(30,64,175,0.12);
+            align-self: center;
+            width: fit-content;
+        }
+        .start-btn {
+            font-family: var(--f-cute);
+            padding: 14px 55px;
+            background: var(--t-green, #63B646);
+            color: white;
+            font-weight: 700;
+            font-size: 1.6rem;
+            border-radius: var(--r-pill);
+            box-shadow: 0 6px 0 #5F9E2B, 0 10px 18px rgba(95,158,43,0.3);
+            transition: all 0.1s;
+            align-self: center;
+            width: fit-content;
+        }
+        .start-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 0 #5F9E2B, 0 12px 20px rgba(95,158,43,0.35);
+        }
+        .start-btn:active {
+            transform: translateY(3px);
+            box-shadow: 0 3px 0 #5F9E2B;
+        }
+
+        /* 기존 게임 스타일 */
+        .grid-table {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            grid-template-rows: repeat(4, 1fr);
+            gap: 10px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            width: 100%;
+            max-width: 950px;
+            aspect-ratio: 16 / 9;
+            position: relative;
+        }
+        .cell {
+            position: relative; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center;
+            background: #1e293b;
+            border-radius: 16px; 
+            font-weight: 900; 
+            font-size: 1.8rem;
+            color: #f1f5f9; 
+            box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
+            transition: transform 0.2s, filter 0.2s;
+        }
+        .overlay {
+            position: absolute; 
+            inset: 0; 
+            background: #334155;
+            border-radius: 14px; 
+            z-index: 5; 
+            opacity: 1;
+            transition: opacity 0.5s ease, transform 0.5s ease;
+            border: 2px solid #475569;
+        }
+        .overlay.revealed { 
+            opacity: 0; 
+            pointer-events: none; 
+            transform: scale(0.9);
+        }
+        .modal-wrap {
+            position: absolute;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.8);
+            z-index: 9999;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            border-radius: 16px;
+        }
+        .modal-wrap.active {
+            display: flex !important; 
+            z-index: 999999;
+        }
+        .modal-box {
+            background: #ffffff;
+            border: 8px solid #fbbf24;
+            border-radius: 40px;
+            padding: 40px;
+            max-width: 500px;
+            width: 80%;
+            text-align: center;
+            box-shadow: 0 20px 25px rgba(0,0,0,0.2);
+        }
+        .modal-box.fail {
+            border: 8px solid #ef4444 !important;
+            background: #fff1f2;
+        }
+        .modal-box.success-flash {
+            border: 8px solid #22c55e !important;
+            background: #f0fdf4;
+            animation: successGlow 0.6s ease;
+        }
+        @keyframes successGlow {
+            0% { box-shadow: 0 20px 25px rgba(0,0,0,0.2), 0 0 0 0 rgba(34,197,94,0.6); }
+            60% { box-shadow: 0 20px 25px rgba(0,0,0,0.2), 0 0 0 18px rgba(34,197,94,0); }
+            100% { box-shadow: 0 20px 25px rgba(0,0,0,0.2), 0 0 0 0 rgba(34,197,94,0); }
+        }
+        .modal-box h2 { font-size: 2.2rem; font-weight: 900; color: #1e293b; margin-bottom: 10px; letter-spacing: -1px}
+        /* [추가] 라운드 성공/실패 결과 팝업에 성공/실패를 나타내는 캐릭터 이미지 표시 */
+        .res-char-img {
+            width: 150px;
+            height: auto;
+            margin: 10px auto;
+            display: block;
+            filter: drop-shadow(0 6px 10px rgba(0,0,0,0.15));
+        }
+        .modal-time {
+            font-family: var(--f-num); font-size: 3.5rem;
+            font-weight: 900; color: #ff6b00; 
+        }
+        .mbtn {
+            padding: 12px 24px; border-radius: 12px; font-weight: 800;
+            font-size: 1rem; cursor: pointer; border: none; transition: 0.2s;
+        }
+        .mbtn:hover { transform: scale(1.05); }
+        .mbtn-exit { background: #64748b; color: #fff; }
+        .mbtn-next { background: #22c55e; color: #fff; border: 3px solid #15803d; }
+        .mbtn-retry { background: #ef4444; color: #fff; }
+        
+        .group-card { position:relative; overflow:visible; border-radius:18px; padding:46px 14px 20px; display:flex; flex-direction:column; align-items:center; background: linear-gradient(180deg, #ffffff, #f1f5f9); border:3px solid var(--team-c, #facc15); box-shadow: 0 8px 18px rgba(31,58,110,0.18); transition: transform 0.15s ease; }
+        .group-card::before { content:''; position:absolute; bottom:0; left:0; right:0; height:8px; background: repeating-linear-gradient(90deg, #1e293b 0 8px, #f8fafc 8px 16px); border-radius:0 0 14px 14px; }
+        .group-card:hover { transform: translateY(-4px); }
+        .group-card .car-ico { width:64px; height:64px; position:absolute; top:-20px; left:50%; transform: translateX(-50%); filter: drop-shadow(0 6px 6px rgba(0,0,0,.3)); }
+        .group-input { width:100%; text-align:center; padding:9px; border-radius:8px; font-family: var(--f-cute); font-weight:700; background:#f8fafc; color:#334155; border:2px solid var(--team-c, #cbd5e1); letter-spacing:.5px; }
+        .btn-cnt { width:44px; height:44px; border-radius:50%; font-family: var(--f-cute); font-size:1.5rem; font-weight:700; background: linear-gradient(180deg, #DBEAFE, #93C5FD); color:#1E5FC0; border:3px solid #fff; box-shadow: 0 4px 0 #60A5FA, 0 6px 12px rgba(30,64,175,0.2); cursor:pointer; display:flex; align-items:center; justify-content:center; transition: transform 0.18s cubic-bezier(.34,1.56,.64,1), box-shadow 0.18s ease; }
+        .btn-cnt:hover { transform: translateY(-3px) scale(1.1) rotate(-6deg); }
+        .btn-cnt:active { transform: translateY(3px) scale(0.95); box-shadow: 0 1px 0 #60A5FA; }
+        @keyframes countPop {
+            0% { transform: scale(1); }
+            45% { transform: scale(1.35) rotate(-4deg); }
+            100% { transform: scale(1); }
+        }
+        #countDisp.pop { animation: countPop 0.35s cubic-bezier(.34,1.56,.64,1); }
+        .round-disp {
+            font-family: var(--f-num); color:#fff; font-size:2.8rem; font-weight:900;
+            text-shadow: 2px 2px 0 #000, -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000;
+            letter-spacing: -2px;
+        }
+        .action-btn { position:absolute; bottom:16px; right:16px; background:var(--neon); color:#fff; width:54px; height:54px; border-radius:16px; display:none; align-items:center; justify-content:center; cursor:pointer; }
+        .action-btn.visible { display:flex; }
+        
+        .page { display: none; width: 100%; height: 100%; flex-direction: column; position: relative; }
+        .page.active { display: flex; }
+
+        .back-btn {
+            position: absolute;
+            top: 90px;
+            left: 80px;
+            font-family: var(--f-cute);
+            font-weight: 700;
+            font-size: 1rem;
+            color: #4a4520;
+            background: #ffffff;
+            border: 3px solid #d9c17a;
+            border-radius: var(--r-pill);
+            padding: 10px 20px;
+            cursor: pointer;
+            box-shadow: 0 4px 0 #b8860b, 0 6px 10px rgba(74,69,32,0.12);
+            transition: all 0.15s ease;
+            z-index: 10;
+        }
+        .back-btn:hover { transform: translateY(-2px); }
+        .back-btn:active { transform: translateY(2px); box-shadow: 0 1px 0 #b8860b; }
+
+        .welcome-menu-btn {
+            font-family: var(--f-cute);
+            font-weight: 700;
+            font-size: 1.3rem;
+            border: 4px solid #fff;
+            border-radius: var(--r-pill);
+            padding: 16px 34px;
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+        .welcome-menu-btn:hover { transform: translateY(-2px); }
+        .welcome-htp-btn {
+            color: #fff;
+            background: linear-gradient(180deg,#5AA3EF,#1E5FC0);
+            box-shadow: 0 6px 0 #14428c, 0 10px 18px rgba(20,66,140,.3);
+        }
+        .welcome-htp-btn:active { transform: translateY(2px); box-shadow: 0 2px 0 #14428c; }
+        .welcome-start-btn {
+            color: #7a4e00;
+            background: linear-gradient(180deg,#ffe08a,#fbbf24);
+            box-shadow: 0 6px 0 #d97706, 0 10px 18px rgba(217,119,6,.3);
+        }
+        .welcome-start-btn:active { transform: translateY(2px); box-shadow: 0 2px 0 #d97706; }
+
+        #htpBtn {
+            background: #fbbf24; color: #ffffff; border: 3px solid #ffffff; box-shadow: 0 4px 0 #b45309;
+            font-weight: 900; font-size: 1.1rem; padding: 12px 25px; border-radius: 50px; transition: transform 0.2s;
+        }
+        #htpBtn:hover { transform: scale(1.1) rotate(5deg); background: #f59e0b; }
+        
+        #pg-category, #pg-subcategory { justify-content: center; }
+
+        /* ===== pg-setup / pg-category / pg-subcategory : 레이싱 컨셉 디자인 ===== */
+        #pg-setup, #pg-category, #pg-subcategory {
+            background: linear-gradient(180deg, #6EC2F2 0%, #9AD8FA 45%, #CDEBFC 100%);
+            border-radius: 16px;
+            overflow: hidden;
+        }
+        #pg-setup { justify-content: flex-start; }
+        #pg-setup::before, #pg-category::before, #pg-subcategory::before {
+            content: ''; position: absolute; top: 0; left: 0; right: 0; height: 22px; z-index: 1;
+            background: repeating-linear-gradient(90deg, #1e293b 0 22px, #f8fafc 22px 44px);
+        }
+        #pg-setup::after, #pg-category::after, #pg-subcategory::after {
+            content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 22px; z-index: 1;
+            background: repeating-linear-gradient(90deg, #1e293b 0 22px, #f8fafc 22px 44px);
+        }
+        .race-heading {
+            font-family: var(--f-cute);
+            font-weight: 800;
+            letter-spacing: 0.5px;
+            color: #ffffff;
+            text-shadow: -2px -2px 0 #1E5FC0, 2px -2px 0 #1E5FC0, -2px 2px 0 #1E5FC0, 2px 2px 0 #1E5FC0, 0 6px 14px rgba(20,66,140,0.4);
+        }
+        .race-subtext {
+            font-family: var(--f-cute);
+            font-weight: 600;
+            color: #14428c;
+            text-shadow: 0 1px 0 rgba(255,255,255,0.6);
+        }
+        .count-panel {
+            background: #ffffff;
+            border-radius: var(--r-pill);
+            border: 4px solid #ffffff;
+            box-shadow: 0 6px 0 #BFDBFE, 0 10px 20px rgba(30,64,175,0.15);
+            padding: 6px 24px;
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+        .count-panel .label {
+            font-family: var(--f-cute);
+            font-weight: 700;
+            color: #14428c;
+            letter-spacing: .3px;
+        }
+        #pg-setup #countDisp {
+            font-family: var(--f-num);
+            color: #1E5FC0;
+            background: #eff6ff;
+            border: 3px solid #BFDBFE;
+            box-shadow: 0 3px 0 #BFDBFE, inset 0 2px 4px rgba(0,0,0,0.06);
+            border-radius: 50%;
+            width: 52px;
+            height: 52px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .cta-race-btn {
+            font-family: var(--f-cute);
+            font-weight: 800;
+            font-size: 1.4rem;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            color: #14171f;
+            background: repeating-linear-gradient(135deg, #facc15 0 14px, #fde047 14px 28px);
+            border: 4px solid #ffffff;
+            border-radius: var(--r-pill);
+            padding: 12px 46px;
+            box-shadow: 0 6px 0 #d97706, 0 10px 20px rgba(217,119,6,0.3);
+            display: inline-flex;
+            align-items: center;
+            gap: 12px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+        .cta-race-btn:hover { transform: translateY(-3px); box-shadow: 0 9px 0 #d97706, 0 14px 24px rgba(217,119,6,0.35); }
+        .cta-race-btn:active { transform: translateY(3px); box-shadow: 0 2px 0 #d97706; }
+
+        #pg-subcategory .cta-race-btn {
+            align-self: center;
+            font-size: 1.6rem;
+            padding: 16px 56px;
+            text-transform: none;
+        }
+
+        /* 단원 목록 화면: 학년은 4개(한 줄), 단원은 학년마다 최대 8개라 4열로 놓는다 */
+        #pg-category .grid-menu {
+            grid-template-columns: repeat(4, 220px);
+            gap: 24px;
+        }
+        #pg-category .menu-box-btn {
+            width: 220px;
+            font-size: 1.8rem;
+        }
+        #pg-subcategory .selection-heading {
+            font-size: 3rem;
+        }
+        #pg-subcategory .grid-menu {
+            grid-template-columns: repeat(4, 240px);
+            gap: 24px;
+            margin-bottom: 28px;
+        }
+        #pg-subcategory .menu-box-btn {
+            width: 240px;
+            height: 130px;
+            aspect-ratio: auto;
+            font-size: 1.6rem;
+        }
+        #pg-subcategory .menu-box-btn span {
+            font-size: 1.05rem;
+            line-height: 1.25;
+            margin-top: 4px;
+        }
+
+        /* 지금 단원 표시 (인트로·팀 설정 화면) */
+        .unit-badge {
+            align-self: center;
+            margin-bottom: 14px;
+            padding: 8px 28px;
+            border-radius: 999px;
+            border: 3px solid #ffffff;
+            background: rgba(255,255,255,0.92);
+            box-shadow: 0 6px 14px rgba(20,66,140,0.25);
+            font-family: var(--f-cute);
+            font-size: 1.5rem;
+            font-weight: 800;
+            color: #1E5FC0;
+        }
+        [data-unit-label][hidden] { display: none; }
+
+        #pg-setup .back-btn, #pg-category .back-btn, #pg-subcategory .back-btn {
+            top: 26px;
+            left: 80px;
+            color: #1E5FC0;
+            border-color: #BFDBFE;
+            box-shadow: 0 4px 0 #93C5FD, 0 6px 10px rgba(30,64,175,0.12);
+        }
+        #pg-setup .back-btn:active, #pg-category .back-btn:active, #pg-subcategory .back-btn:active { box-shadow: 0 1px 0 #93C5FD; }
+
+        .nav-topright-group {
+            position: absolute;
+            top: 26px;
+            right: 80px;
+            z-index: 10;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .home-btn, .forward-btn {
+            position: relative;
+            font-family: var(--f-cute);
+            font-weight: 700;
+            font-size: 1rem;
+            color: #1E5FC0;
+            background: #ffffff;
+            border: 3px solid #BFDBFE;
+            border-radius: var(--r-pill);
+            padding: 10px 20px;
+            cursor: pointer;
+            box-shadow: 0 4px 0 #93C5FD, 0 6px 10px rgba(30,64,175,0.12);
+            transition: all 0.15s ease;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .home-btn:hover, .forward-btn:hover { transform: translateY(-2px); }
+        .home-btn:active, .forward-btn:active { transform: translateY(2px); box-shadow: 0 1px 0 #93C5FD; }
+        .home-btn svg { width: 16px; height: 16px; flex: none; }
+
+        #pg-game .game-shell {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            border-radius: 26px;
+            padding: 14px 16px 16px;
+            position: relative;
+            overflow: hidden;
+            background: rgba(255,255,255,.28);
+            border: 1px solid rgba(255,255,255,.6);
+            box-shadow: 0 20px 50px rgba(23,63,110,.25);
+            backdrop-filter: blur(6px);
+        }
+        #pg-game .g-topbar { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; flex: none; }
+        #pg-game .g-logo { font-family: var(--f-cute); font-weight: 700; font-size: 1.15rem; letter-spacing: .02em; color: #fff; text-shadow: 0 2px 0 #1e5fc0; white-space: nowrap; }
+        #pg-game .g-logo .y { color: var(--t-yellow); }
+        #pg-game .track { flex: 1; height: 42px; background: #767483; border-radius: 999px; position: relative; display: flex; align-items: center; padding: 0 16px; box-shadow: inset 0 2px 6px rgba(0,0,0,.25); overflow: hidden; }
+        #pg-game .track::before { content: ''; position: absolute; top: 50%; left: 0; right: 0; height: 4px; transform: translateY(-50%); background: repeating-linear-gradient(90deg, #fff 0 12px, transparent 12px 24px); opacity: .5; }
+        #pg-game .cp { width: 28px; height: 28px; border-radius: 50%; background: rgba(255,255,255,.35); color: #fff; display: grid; place-items: center; font-weight: 800; font-size: 15px; position: relative; z-index: 2; flex: none; border: 2px solid rgba(0,0,0,.12); }
+        #pg-game .cp.done { background: var(--t-green); color: #fff; }
+        #pg-game .cp.now { background: var(--t-yellow); color: #5a3a00; transform: scale(1.18); box-shadow: 0 0 0 4px rgba(251,194,60,.45); }
+        #pg-game .cp-sp { flex: 1; }
+        #pg-game .flag-fin { width: 26px; height: 26px; flex: none; z-index: 2; }
+        #pg-game .g-actions { display: flex; gap: 8px; align-items: center; }
+        /* [수정] 게임 화면 트랙의 결승선 옆에 있던 How to Play 버튼은 상단 nav의 ? 아이콘과
+           기능이 겹쳐서, 결승선을 표시하는 장식 라벨로 대체 (기존 .g-htp 자리/크기 재사용) */
+        #pg-game .g-finish-label { display: block; }
+        #pg-game .g-ico { width: 40px; height: 40px; border-radius: 50%; border: 2px solid #fff; background: #1e2a44; color: #fff; cursor: pointer; font-size: 16px; box-shadow: 0 4px 0 rgba(0,0,0,.25); }
+        #pg-game .g-status { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; flex: none; }
+        #pg-game .g-timer { flex: 1; min-width: 190px; background: linear-gradient(180deg, #ffd24a, #f6a500); border: 3px solid #dd8a00; border-radius: 18px; padding: 9px 14px; display: flex; align-items: center; gap: 10px; position: relative; box-shadow: 0 5px 0 #c67a00, 0 10px 18px rgba(221,138,0,.3); }
+        #pg-game .g-timer .stop { width: 26px; height: 26px; flex: none; }
+        #pg-game .g-timer .lab { font-weight: 800; color: #7a4e00; font-size: .8rem; }
+        #pg-game .g-timer .big { font-family: var(--f-num); font-size: clamp(26px, 3.8vw, 36px); color: #5a3a00; line-height: .9; font-variant-numeric: tabular-nums; }
+        #pg-game .g-rec { flex: 1; min-width: 210px; background: #fff; border: 2px solid #cfe0f0; border-radius: 18px; padding: 15px 14px; display: flex; align-items: center; gap: 10px; box-shadow: 0 4px 12px rgba(31,58,110,.1); }
+        #pg-game .g-rec .badge { width: 38px; height: 38px; border-radius: 50%; background: linear-gradient(180deg, #3b9ae8, #2c7be0); display: grid; place-items: center; font-size: 18px; flex: none; box-shadow: 0 3px 0 rgba(30,95,192,.35); }
+        #pg-game .g-rec .k { font-weight: 800; color: #5c6577; font-size: .82rem; }
+        #pg-game .g-rec .v { font-weight: 800; color: #1e5fc0; font-size: 1.3rem; font-variant-numeric: tabular-nums; font-family: var(--f-num); line-height: 1.05; }
+        #pg-game .g-rec .hint { margin-left: auto; background: #eaf3fc; color: #2565b8; font-weight: 800; font-size: .8rem; line-height: 1; padding: 8px 10px; border-radius: 12px; text-align: center; flex: none; white-space: nowrap; }
+        #pg-game .g-roster-row { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+        #pg-game .g-roster { display: flex; gap: 8px; flex-wrap: wrap; background: rgba(255,255,255,.55); padding: 9px; border-radius: 999px; margin-bottom: 0; justify-content: center; flex: 1; min-width: 0; }
+        #pg-game .chip { display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 999px; background: var(--chip-bg, #1e5fc0); color: #fff; font-weight: 800; font-size: 1.1rem; box-shadow: 0 3px 0 rgba(0,0,0,.1); }
+        #pg-game .chip .car { width: 18px; height: 18px; flex: none; }
+        #pg-game .board { flex: 1; min-height: 0; background: rgba(255,255,255,.55); border-radius: 22px; padding: 8px; box-shadow: inset 0 2px 10px rgba(30,95,192,.12); display: flex; }
+        #pg-game .cells { width: 100%; height: 100%; display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+        #pg-game .grid-table { width: 100%; height: 100%; max-width: 100%; aspect-ratio: auto; }
+        #pg-game .coach {display: none !important; }
+        #pg-game .cell {
+            position: relative;
+            display: FLEX;
+            place-items: center;
+            background: linear-gradient(180deg, #333a4e 0%, #272d3e 100%);
+            border: 2px solid #1c2233;
+            border-radius: 16px;
+            font-family: var(--f-cute);
+            font-weight: 700;
+            font-size: clamp(28px, 4.4vw, 52px);
+            color: #f8fafc;
+            box-shadow: 0 4px 0 rgba(0,0,0,0.24), inset 0 1px 0 rgba(255,255,255,0.08);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            overflow: hidden;
+            padding: 6px;
+            text-align: center;
+            min-height: 100px;
+        }
+        #pg-game .coach .msg { font-weight: 800; color: #173f7c; font-size: .95rem; }
+        #pg-game .keycap { font-weight: 800; font-size: .8rem; color: #fff; background: #1e2a44; border: 1px solid #0d1526; border-bottom: 3px solid #090f1c; border-radius: 8px; padding: 6px 12px; white-space: nowrap; }
+        #pg-game .coach .prog { margin-left: auto; background: var(--t-blue); color: #fff; font-weight: 800; font-size: .82rem; padding: 6px 12px; border-radius: 999px; font-variant-numeric: tabular-nums; }
+        #pg-game .cell.revealed {
+            background: var(--cell-color, #1e5fc0);
+            border-color: color-mix(in srgb, var(--cell-color, #1e5fc0) 70%, #000 30%);
+            box-shadow: 0 4px 0 color-mix(in srgb, var(--cell-color, #1e5fc0) 55%, #000 25%), 0 6px 16px rgba(0,0,0,0.18);
+        }
+        #pg-game .cell .word {
+            position: relative;
+            z-index: 1;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.16);
+            opacity: 0;
+            transform: scale(0.96);
+            transition: opacity 0.2s ease, transform 0.2s ease;
+            display: block;
+            width: 100%;
+            text-align: center;
+            line-height: 1.2;
+            padding: 0 6px;
+            /* 단어 중간에서 줄이 바뀌지 않게 (photographer → photograph/er 방지). 두 단어(police station)는 띄어쓰기에서만 줄바꿈 */
+            word-break: keep-all;
+            overflow-wrap: normal;
+        }
+        /* 10글자 이상 긴 단어는 글자를 조금 줄인다. 그래도 칸을 넘치면 fitCellWord()가 들어갈 때까지 더 줄인다 */
+        #pg-game .cell.long-word .word { font-size: 0.8em; }
+        #pg-game .cell.revealed .word {
+            opacity: 1;
+            transform: scale(1);
+        }
+        #pg-game .cell .num {
+            position: absolute;
+            top: 8px;
+            left: 10px;
+            font-size: 11px;
+            font-weight: 800;
+            color: rgba(255,255,255,0.38);
+        }
+        #pg-game .overlay {
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(180deg, rgba(51,58,78,0.95) 0%, rgba(39,45,62,0.98) 100%);
+            border-radius: 14px;
+            z-index: 5;
+            opacity: 1;
+            transition: opacity 0.35s ease, transform 0.35s ease;
+            display: grid;
+            place-items: center;
+            font-family: var(--f-cute);
+            font-weight: 700;
+            font-size: clamp(32px, 4.7vw, 56px);
+            color: rgba(255,255,255,0.16);
+        }
+        #pg-game .overlay.revealed {
+            opacity: 0;
+            pointer-events: none;
+            transform: scale(0.96);
+        }
+        #pg-game .action-btn {
+            position: absolute; bottom: 18px; right: 18px; background: #1e5fc0; color: #fff; width: 56px; height: 56px; border: none; border-radius: 16px; display: none; align-items: center; justify-content: center; cursor: pointer; box-shadow: 0 8px 18px rgba(30,95,192,0.25);
+        }
+        #pg-game .action-btn.visible { display: flex; }
+        #pg-game .mobile-space-btn {
+            flex: none;
+            background: none; border: none; padding: 0;
+            display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 15;
+        }
+        #pg-game .mobile-space-btn img { display: block; }
+        #pg-game .mobile-space-btn:active img {
+            transform: translateY(3px) scale(0.96);
+        }
+        #pg-game .start-ov {
+            position: absolute;
+            inset: 0;
+            z-index: 20;
+            display: grid;
+            place-items: center;
+            background: rgba(18,26,46,.94);
+            backdrop-filter: blur(2px);
+            border-radius: 26px;
+        }
+        #pg-game .start-card {
+            background: #fff;
+            border-radius: 22px;
+            padding: 26px 44px 30px;
+            text-align: center;
+            box-shadow: 0 20px 50px rgba(0,0,0,.35);
+            border: 4px solid #1e5fc0;
+        }
+        #pg-game .start-card.is-counting {
+            display: none;
+        }
+        #pg-game .start-round {
+            font-family: var(--f-cute);
+            font-size: 26px;
+            color: #173f7c;
+            letter-spacing: .04em;
+            margin-bottom: 18px;
+        }
+        #pg-game .start-btn {
+            font-family: var(--f-cute);
+            font-weight: 700;
+            font-size: 24px;
+            color: #fff;
+            background: #63B646;
+            border: 0;
+            border-radius: 999px;
+            padding: 16px 36px;
+            cursor: pointer;
+            box-shadow: 0 6px 0 #5F9E2B, 0 10px 18px rgba(95,158,43,.35);
+            display: inline-flex;
+            align-items: center;
+            gap: 12px;
+        }
+        #pg-game .start-btn .kc {
+            height: 46px;
+            width: auto;
+            object-fit: contain;
+            display: block;
+        }
+        #pg-game .count {
+            position: absolute;
+            inset: 0;
+            display: none;
+            place-items: center;
+            font-family: var(--f-cute);
+            font-size: clamp(90px, 24cqw, 170px);
+            color: #fff;
+            text-shadow: 0 6px 0 rgba(0,0,0,.28), 0 12px 26px rgba(0,0,0,.35);
+        }
+        #pg-game .count.show { display: grid; }
+        #pg-game .count .n { display: block; animation: pop 0.8s ease both; }
+
+        .htable { width: 100%; border-collapse: separate; border-spacing: 0 10px; font-size: 1.2rem; }
+        .htable td { padding: 15px; background: #f1f5f9; font-weight: 800; color: #334155; }
+        .htable td:first-child { border-radius: 12px 0 0 12px; }
+        .htable td:last-child { border-radius: 0 12px 12px 0; }
+
+        /* ===== 메인 화면 버튼 강조 (배경 장식보다 버튼이 먼저 눈에 띄도록) ===== */
+        #pg-welcome .menu-buttons {
+            background: rgba(255,255,255,0.22);
+            backdrop-filter: blur(3px);
+            border-radius: 32px;
+            padding: 26px 30px;
+            z-index: 5;
+        }
+        .welcome-menu-btn {
+            font-size: 1.5rem;
+            padding: 20px 42px;
+            box-shadow: 0 8px 0 rgba(0,0,0,0.25), 0 16px 30px rgba(0,0,0,0.28);
+        }
+        .welcome-menu-btn:hover { transform: translateY(-4px) scale(1.04); }
+
+        /* ===== 완주(전체 라운드 클리어) / 라운드 성공 시 컨페티 연출 ===== */
+        .confetti-layer {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            overflow: hidden;
+            z-index: 10000000;
+        }
+        .confetti-piece {
+            position: absolute;
+            top: -24px;
+            width: 10px;
+            height: 16px;
+            opacity: 0.95;
+            border-radius: 2px;
+            animation: confettiFall linear forwards;
+        }
+        @keyframes confettiFall {
+            to { transform: translateY(1000px) rotate(720deg); opacity: 0.15; }
+        }
+
+        /* ===== 화면 속 스페이스 버튼 - 가시성 강화(은은한 펄스) ===== */
+        #pg-game .mobile-space-btn img {
+            animation: spaceBtnPulse 1.8s ease-in-out infinite;
+        }
+        @keyframes spaceBtnPulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.08); }
+        }
+    </style>
+    <link rel="stylesheet" href="topnav.css">
+</head>
+<body>
+
+<!-- [추가] 휴대폰 세로 화면 안내 - 태블릿에는 안 뜨고, 휴대폰 화면 크기에서 세로로 시작했을 때만 뜬다.
+     가로로 돌리면 자동으로 사라지고, "이대로 할래요"를 누르면 세로로도 계속 플레이할 수 있다. -->
+<div id="rotate-overlay" style="display:none;position:fixed;inset:0;z-index:2147483000;background:#f0f9ff;flex-direction:column;align-items:center;justify-content:center;gap:20px;padding:36px;text-align:center;font-family:var(--f-cute);">
+    <div style="width:92px;height:148px;border:9px solid #3592DE;border-radius:26px;background:#ffffff;animation:rotateHintWR 2.6s ease-in-out infinite;"></div>
+    <h2 style="font-weight:700;font-size:24px;color:#14428c;margin:0;">화면을 가로로 돌려 주세요</h2>
+    <p style="font-weight:400;font-size:16px;color:#475569;margin:0;line-height:1.6;">가로로 놓으면 단어 칸과 버튼이 커져서<br>훨씬 편하게 할 수 있어요.</p>
+    <button type="button" onclick="dismissRotateOverlay()" style="font-family:var(--f-cute);font-weight:700;font-size:17px;color:#ffffff;background:#fbbf24;border:none;box-shadow:0 6px 0 #d97706;border-radius:999px;padding:12px 32px;cursor:pointer;">이대로 할래요</button>
+</div>
+<style>
+@keyframes rotateHintWR {
+    0%, 15% { transform: rotate(0deg); }
+    45%, 60% { transform: rotate(-90deg); }
+    90%, 100% { transform: rotate(0deg); }
+}
+</style>
+<script>
+(function () {
+    var overlay = document.getElementById('rotate-overlay');
+    if (!overlay) return;
+    var dismissed = false;
+    // [수정 10/20] Save the Icecream·Anagram 과 같은 기준으로 맞춘다.
+    // 예전에는 기기 화면 크기(screen.width)로 휴대폰인지 판단해서, PC 창을 세로로 줄였을 때나
+    // screen.width 를 실제 픽셀로 알려 주는 일부 안드로이드·앱 속 브라우저에서는 안 떴다.
+    // 이제 지금 창 모양만 본다: 세로이고 가로 폭이 640px(1280 무대 배율 0.5)보다 좁으면 띄운다.
+    // 아이패드 세로(768px 이상)처럼 충분히 큰 화면에서는 뜨지 않는다.
+    function shouldShow() {
+        var w = window.innerWidth, h = window.innerHeight;
+        return !dismissed && h > w && w < 640;
+    }
+    function updateRotateOverlay() {
+        overlay.style.display = shouldShow() ? 'flex' : 'none';
+    }
+    window.dismissRotateOverlay = function () {
+        dismissed = true;
+        updateRotateOverlay();
+    };
+    window.addEventListener('resize', updateRotateOverlay);
+    // '이대로 할래요' 는 이번만 넘긴다. 기기를 돌리면 다시 판단해서 알려 준다.
+    // 돌린 직후에는 창 크기가 늦게 바뀌는 기기가 있어 한 박자 뒤에 한 번 더 맞춘다
+    function onRotate() {
+        dismissed = false;
+        updateRotateOverlay();
+        setTimeout(updateRotateOverlay, 300);
+    }
+    window.addEventListener('orientationchange', onRotate);
+    if (screen.orientation && screen.orientation.addEventListener) {
+        screen.orientation.addEventListener('change', onRotate);
+    }
+    updateRotateOverlay();
+})();
+</script>
+
+<!-- [추가] 이모지를 대체하는 아이콘 그림(finish.png, tro.png, space.png, warn.png)은 흰 사각형
+     배경이 그대로 찍혀 있어, 들어가는 버튼/카드 배경색이 흰색이 아니면 도드라져 보인다.
+     가장자리(네 변)부터 흰색 영역을 채우기 방식(flood fill)으로 찾아 투명화하고, 배경과
+     맞닿은 경계는 알파를 서서히 낮춰 계단현상 없이 부드럽게 만든다. 이렇게 하면 아이콘이
+     어떤 배경 위에 있든 그 배경색이 그대로 비쳐 보여 "배경이 버튼/페이지와 동일해" 보인다. -->
+<script>
+window.removeWhiteBackground = function (imgEl, opts) {
+    if (!imgEl) return;
+    opts = opts || {};
+    var hardTol = opts.hardTol == null ? 12 : opts.hardTol;
+    var softTol = opts.softTol == null ? 60 : opts.softTol;
+    function apply() {
+        try {
+            var w = imgEl.naturalWidth, h = imgEl.naturalHeight;
+            if (!w || !h) return;
+            var canvas = document.createElement('canvas');
+            canvas.width = w; canvas.height = h;
+            var ctx = canvas.getContext('2d');
+            ctx.drawImage(imgEl, 0, 0);
+            var imageData = ctx.getImageData(0, 0, w, h);
+            var data = imageData.data;
+            var n = w * h;
+            function whiteness(i) {
+                return Math.min(data[i * 4], data[i * 4 + 1], data[i * 4 + 2]);
+            }
+            var bg = new Uint8Array(n);
+            var visited = new Uint8Array(n);
+            var stack = [];
+            for (var x = 0; x < w; x++) { stack.push(x); stack.push((h - 1) * w + x); }
+            for (var y = 0; y < h; y++) { stack.push(y * w); stack.push(y * w + w - 1); }
+            while (stack.length) {
+                var i = stack.pop();
+                if (visited[i]) continue;
+                visited[i] = 1;
+                if (whiteness(i) < 255 - hardTol) continue;
+                bg[i] = 1;
+                data[i * 4 + 3] = 0;
+                var px = i % w, py = (i / w) | 0;
+                if (px > 0) stack.push(i - 1);
+                if (px < w - 1) stack.push(i + 1);
+                if (py > 0) stack.push(i - w);
+                if (py < h - 1) stack.push(i + w);
+            }
+            for (var y2 = 0; y2 < h; y2++) {
+                for (var x2 = 0; x2 < w; x2++) {
+                    var i2 = y2 * w + x2;
+                    if (bg[i2]) continue;
+                    var wn = whiteness(i2);
+                    if (wn < 255 - softTol) continue;
+                    var touchesBg =
+                        (x2 > 0 && bg[i2 - 1]) || (x2 < w - 1 && bg[i2 + 1]) ||
+                        (y2 > 0 && bg[i2 - w]) || (y2 < h - 1 && bg[i2 + w]);
+                    if (!touchesBg) continue;
+                    var t = (wn - (255 - softTol)) / softTol;
+                    data[i2 * 4 + 3] = Math.round(data[i2 * 4 + 3] * (1 - t));
+                }
+            }
+            ctx.putImageData(imageData, 0, 0);
+            imgEl.src = canvas.toDataURL('image/png');
+        } catch (e) { /* 캔버스 작업이 막히면 원본 그림을 그대로 둔다 */ }
+    }
+    if (imgEl.complete && imgEl.naturalWidth) apply();
+    else imgEl.addEventListener('load', apply, { once: true });
+};
+document.addEventListener('DOMContentLoaded', function () {
+    document.querySelectorAll('.icon-photo').forEach(function (el) { removeWhiteBackground(el); });
+});
+</script>
+
+<audio id="bgm-intro" src="fluxsound-cheerful-upbeat-kids-486631.mp3" loop preload="none"></audio>
+<!-- 실제 게임(단어 읽기) 화면에서는 학생이 소리 내어 읽는 활동에 방해되지 않도록 배경음악을 재생하지 않는다.
+     이 트랙은 더 이상 사용하지 않으므로 불필요한 로딩을 막기 위해 preload를 꺼둔다. -->
+<audio id="bgm-game" src="the_mountain-kid-450659.mp3" loop preload="none"></audio>
+
+<!-- [수정] 상단 네비게이션 - pick the word 게임과 동일한 glass-pill 스타일/아이콘/배치로 통일.
+     왼쪽: Home/Back/Forward(첫 화면 welcome 제외 모든 화면, 항상 같은 위치),
+     오른쪽: How to Play/효과음/배경음악/전체화면(항상 같은 위치) -->
+<div id="nav-left-group">
+  <button type="button" id="game-home-btn" class="glass-pill nav-icon-btn" onclick="homeButtonClicked()" title="처음으로">
+    <i class="fa-solid fa-house"></i>
+  </button>
+  <button type="button" id="game-back-btn" class="glass-pill nav-icon-btn" onclick="goBackGlobal()" title="뒤로">
+    <i class="fa-solid fa-play" style="transform:scaleX(-1);"></i>
+  </button>
+  <button type="button" id="game-forward-btn" class="glass-pill nav-icon-btn" onclick="goForwardGlobal()" title="앞으로">
+    <i class="fa-solid fa-play"></i>
+  </button>
+</div>
+
+<div id="nav-right-group">
+  <button type="button" id="global-htp-btn" class="glass-pill nav-icon-btn" onclick="openHTP(page === 'pg-welcome' ? 'welcome' : 'game')" title="How to Play">
+    <i class="fa-regular fa-circle-question"></i>
+  </button>
+  <button type="button" id="sfx-toggle-btn" class="glass-pill nav-icon-btn" onclick="toggleSfx()" title="효과음 켜기/끄기">
+    <i class="fa-solid fa-bell" id="sfx-toggle-icon"></i>
+  </button>
+  <button type="button" id="music-toggle-btn" class="glass-pill nav-icon-btn" onclick="toggleMusic()" title="배경음악 켜기/끄기">
+    <i class="fa-solid fa-music" id="music-toggle-icon"></i>
+  </button>
+  <button type="button" id="fullscreen-toggle-btn" class="glass-pill nav-icon-btn" onclick="toggleFullscreen()" title="전체화면">
+    <i class="fa-solid fa-expand" id="fullscreen-toggle-icon"></i>
+  </button>
+</div>
+<script src="topnav.js" data-backdrop="0.png"></script>
+<script src="unit-data.js"></script>
+<script src="unit.js"></script>
+
+<div class="game-container">
+    <div id="confettiLayer" class="confetti-layer"></div>
+    <div id="pg-welcome" class="page active" style="justify-content: center;">
+        <div style="flex-grow: 1;"></div>
+        <div class="unit-badge" data-unit-label hidden></div>
+        <div class="menu-buttons">
+            <button class="welcome-menu-btn welcome-htp-btn" onclick="openHTP('welcome')">How to Play</button>
+            <button class="welcome-menu-btn welcome-start-btn" id="welcome-start-btn" onclick="goToSetupFirst()">팀 설정하기</button>
+        </div>
+    </div>
+
+    <div id="pg-setup" class="page" style="padding-top: 10px; padding-bottom: 10px;">
+        <div class="text-center" style="position:relative; z-index:1; padding-top:10px;">
+            <h2 class="text-5xl mb-2 race-heading">팀 설정하기</h2>
+            <p class="text-2xl font-medium race-subtext">팀 수, 팀 색깔, 팀 이름(최대 8글자)을 정해주세요.</p>
+        </div>
+        <div class="w-full flex flex-col items-center gap-3" style="position:relative; z-index:1;">
+            <div class="count-panel">
+                <span class="label text-xl">참가 팀 수</span>
+                <button class="btn-cnt" onclick="chgCount(-1)">-</button>
+                <span id="countDisp" class="font-black text-2xl">6</span>
+                <button class="btn-cnt" onclick="chgCount(1)">+</button>
+            </div>
+            <div id="groupGrid" class="grid grid-cols-3 gap-3 w-full max-w-[980px]" style="margin-top:10px;"></div>
+            <button onclick="goToCategoryAfterSetup()" class="cta-race-btn" style="margin-top:8px;">
+                Game Start
+            </button>
+        </div>
+    </div>
+
+    <!-- 단원 목록 화면: 주소에 단원이 없을 때만 쓴다 (학년 → 단원, 단원을 누르면 그 단원 주소로 이동) -->
+    <div id="pg-category" class="page">
+        <h2 class="selection-heading">학년을 선택하세요.</h2>
+        <div class="grid-menu" id="category-menu-grid"></div>
+    </div>
+
+    <div id="pg-subcategory" class="page">
+        <h2 class="selection-heading" id="subcategory-heading">단원을 선택하세요.</h2>
+        <div class="grid-menu" id="subcategory-menu-grid"></div>
+    </div>
+
+<div id="pg-game" class="page" style="justify-content: flex-start;">
+    <div class="game-shell">
+        <div class="g-topbar">
+            <span class="g-logo">WORD<span class="y">RACE</span></span>
+            <div class="track">
+                <div class="cp now">1</div>
+                <div class="cp-sp"></div>
+                <div class="cp">2</div>
+                <div class="cp-sp"></div>
+                <div class="cp">3</div>
+                <div class="cp-sp"></div>
+                <div class="cp">4</div>
+                <div class="cp-sp"></div>
+                <div class="cp">5</div>
+                <svg class="flag-fin" viewBox="0 0 24 24"><path d="M5 22V3" stroke="#fff" stroke-width="2" stroke-linecap="round"/><rect x="7" y="3" width="14" height="10" fill="#fff"/></svg>
+            </div>
+            <div class="g-actions">
+                <img class="icon-photo g-finish-label" src="finish.png" alt="Finish!" style="width:auto;height:52px;object-fit:contain;">
+            </div>
+        </div>
+
+        <div class="g-status">
+            <div id="timerDisp" class="g-timer">
+                <svg class="stop" viewBox="0 0 24 24" fill="none" stroke="#5a3a00" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="13" r="8"/><path d="M12 13V9M9 2h6M18.5 6.5l1.5-1.5"/></svg>
+                <div>
+                    <div id="roundLabel" class="lab">진행 시간 · ROUND 1 / 5</div>
+                    <div class="big">00.00</div>
+                </div>
+            </div>
+            <div id="recDisp" class="g-rec">
+                <div class="badge"><img class="icon-photo" src="tro.png" alt="" style="width:34px;height:34px;object-fit:contain;"></div>
+                <div>
+                    <div class="k">이전 라운드 기록</div>
+                    <div class="v">없음</div>
+                </div>
+                <div class="hint" id="recHint">이 기록보다 빨라야 통과됩니다.</div>
+            </div>
+            <!-- 모바일에는 물리 스페이스바가 없으므로 탭으로 대신할 수 있는 버튼 -->
+            <button id="mobileSpaceBtn" class="mobile-space-btn" type="button" onclick="triggerSpaceAction()"><img class="icon-photo" src="spaces.png" alt="SPACE" style="height:74px;width:auto;object-fit:contain;"></button>
+        </div>
+
+        <div class="g-roster-row">
+            <div id="dashboard" class="g-roster"></div>
+        </div>
+
+        <div class="board">
+            <div id="colorGrid" class="cells grid-table"></div>
+        </div>
+
+        <div id="startOverlay" class="start-ov">
+            <div class="start-card">
+                <div id="startRoundLabel" class="start-round">ROUND 1 / 5</div>
+                <button id="startBtn" class="start-btn" type="button">스페이스 바를 눌러 시작하세요 <img class="icon-photo kc" src="space.png" alt="Space"></button>
+            </div>
+            <div id="count" class="count"></div>
+        </div>
+
+        <div class="coach">
+            <span class="keycap">SPACE</span>
+            <span class="msg">스페이스바를 눌러 셀을 하나씩 공개하세요</span>
+            <span class="prog" id="roundDisp">ROUND 1 / 5</span>
+        </div>
+
+        <button id="nextBtn" class="action-btn" onclick="handleNext()">➤</button>
+    </div>
+</div>
+
+    <div id="resModal" class="modal-wrap">
+      <div id="resBox" class="modal-box">
+        <div style="color:#94a3b8;font-weight:700;font-size:1.1rem;letter-spacing:2px;text-transform:uppercase">이번 라운드 기록</div>
+        <img id="resCharImg" class="res-char-img" src="" alt="" hidden>
+        <div id="resTime" class="modal-time">00.00초</div>
+        <div id="resMsg" style="font-size:1.1rem;font-weight:700;color:#cbd5e1"></div>
+        <div id="resBtns" style="display:flex;gap:12px;justify-content:center;margin-top:8px"></div>
+      </div>
+    </div>
+
+    <div id="repModal" class="modal-wrap">
+      <div class="modal-box" style="border: 8px solid #fbbf24; border-radius: 40px; padding: 40px; max-width: 580px; text-align: center;">
+        <h2 style="font-size: 2.2rem; font-weight: 900; color: #1e293b; margin-bottom: 20px;">Class Record</h2>
+        <table class="htable" style="margin-bottom: 30px;">
+          <thead>
+            <tr style="color: #64748b;">
+              <th style="padding: 10px;">라운드</th>
+              <th style="padding: 10px;">소요 시간</th>
+            </tr>
+          </thead>
+          <tbody id="repBody"></tbody>
+        </table>
+        <div style="display: flex; gap: 15px; justify-content: center;">
+          <button class="mbtn" onclick="resetGame()" style="background: #fbbf24; color: white; padding: 15px 25px; border-radius: 16px; font-weight: 800;">즉시 재도전</button>
+          <button class="mbtn" onclick="goSetup()" style="background: #64748b; color: white; padding: 15px 25px; border-radius: 16px; font-weight: 800;">새 팀으로 시작</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="htpModal" class="modal-wrap">
+      <div class="modal-box" style="max-width: 760px; text-align: left; padding: 26px 40px; position: relative;">
+        <button onclick="closeHTP()" style="position:absolute; top:14px; right:20px; font-size: 1.5rem; cursor:pointer; background:none; border:none;">✕</button>
+        <h2 style="font-size: 1.7rem; font-weight: 900; margin-bottom: 6px; color: #1e293b; text-align: center;">How to Play</h2>
+        <p style="text-align: center; font-weight: 700; color: #1e5fc0; font-size: 1.05rem; margin: 0 0 12px; white-space: nowrap;">학습목표: Word Race 게임을 하며 단어를 빠르고 정확하게 읽어 봅시다.</p>
+        <div style="font-size: 1.05rem; color: #334155; line-height: 1.5;">
+          <p><strong>1.</strong> '팀 설정하기'에서 팀 수, 팀 색깔, 팀 이름을 정합니다.</p>
+          <p><strong>2.</strong> 'Game Start'를 누르면 이번 단원의 단어로 게임이 시작됩니다.</p>
+          <p class="hanging-indent"><strong>3.</strong> 화면에 우리 팀 색깔이 나오면 자리에서 일어나, 팀원들과 동시에 단어를 소리 내어 읽습니다.</p>
+          <p><strong>4.</strong> 화면의 단어를 모두 읽으면 라운드가 종료됩니다.</p>
+          <p class="hanging-indent"><strong>5.</strong> 이전 라운드보다 기록을 단축시켜야 다음 라운드(총 5라운드)를 도전할 수 있습니다.</p>
+          <p class="hanging-indent"><strong>6.</strong> 기록 단축에 실패하면 같은 라운드를 최대 3번까지 다시 도전할 수 있습니다. 모두 실패하면 그 라운드에서 게임이 끝납니다.</p>
+          <p><strong>7.</strong> 5라운드까지 성공하면 Word Race 완주 성공!</p>
+          <p class="hanging-indent"><strong>8.</strong> 키보드의 스페이스바 대신, 화면 속 <img class="icon-photo" src="spaces.png" alt="SPACE" style="width:64px;height:auto;object-fit:contain;vertical-align:middle;"> 버튼을 눌러서 진행할 수도 있습니다.</p>
+          <div style="margin-top: 14px; padding: 12px 16px; background: #f1f5f9; border-radius: 12px; border-left: 5px solid #cbd5e1;">
+            <p style="margin: 0; font-weight: 800; color: #dc2626; display: flex; align-items: center; gap: 6px;"><img class="icon-photo" src="warn.png" alt="" style="width:22px;height:22px;object-fit:contain;"> 주의사항</p>
+            <p style="margin: 4px 0 0 0; color: #1e293b;">- 팀원 모두 정확하게 단어를 읽어요.</p>
+            <p style="margin: 0; color: #1e293b;">- 다른 팀 색깔의 단어를 읽지 마세요.</p>
+          </div>
+        </div>
+        <div id="htp-gamestart-wrap" style="display:none; margin-top: 14px; text-align: center; gap: 12px; justify-content: center; align-items: center;">
+          <button class="start-btn" onclick="closeHTP()" style="padding: 10px 40px; font-size: 1.2rem; background: #94a3b8; box-shadow: 0 6px 0 #64748b, 0 10px 18px rgba(100,116,139,0.3);">닫기</button>
+          <button class="start-btn" onclick="startFromHTP()" style="padding: 10px 40px; font-size: 1.2rem;">Game Start</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- [추가] 실제 게임 화면에서 홈/뒤로가기 버튼을 누르면 뜨는 종료 확인 팝업 -->
+    <div id="exitConfirmModal" class="modal-wrap">
+      <div class="modal-box" style="max-width: 560px; padding: 50px;">
+        <h2 style="font-size: 2.2rem; font-weight: 900; color: #1e293b; margin: 0 0 6px;">게임을 종료할까요?</h2>
+        <img id="exit-confirm-char-img" src="q.png" alt="" style="width: 200px; height: auto; margin: 24px auto; display: block; filter: drop-shadow(0 6px 10px rgba(0,0,0,0.15));">
+        <p style="font-size: 1.3rem; font-weight: 700; color: #475569; margin: 0;">지금 나가면 풀던 문제가 사라져요.</p>
+        <div style="display: flex; gap: 16px; justify-content: center; margin-top: 12px">
+          <button class="mbtn" style="background: #64748b; color: #fff; padding: 16px 34px; font-size: 1.2rem;" onclick="confirmExitProceed()">나가기</button>
+          <button class="mbtn" style="background: #22c55e; color: #fff; padding: 16px 34px; font-size: 1.2rem;" onclick="closeExitConfirm()">계속하기</button>
+        </div>
+      </div>
+    </div>
+</div>
+
+<script>
+/* ================= BACKGROUND MUSIC ================= */
+// 실제 게임 화면(pg-game)에서는 팀원들이 단어를 소리 내어 읽는 활동에 방해되지 않도록
+// 배경음악을 끄고, 인트로/팀설정/주제선택 화면에서만 재생한다(교실 수업용 소음 저감).
+// 음소거 상태는 화면 전체에서 공유되는 값 하나(bgmMuted)로 관리한다. 여러 사람이 함께 쓰는
+// 공용 기기라 이전 사용자의 선택이 남지 않도록 localStorage에는 저장하지 않고, 새로 열 때마다
+// 항상 기본값으로 시작한다.
+const bgmIntro = document.getElementById('bgm-intro');
+const bgmGame = document.getElementById('bgm-game');
+let bgmMuted = false; // 인트로~선택 화면 트랙의 음소거 상태 (기본 on)
+// [추가] 실제 게임(읽기) 화면 트랙은 학생이 소리 내어 읽는 활동에 방해되지 않도록 매번
+// 꺼진 채로 시작한다(기본 off). 인트로~선택 화면 쪽 기본값(on)과는 별개로 관리한다.
+let gameBgmMuted = true;
+let audioUnlocked = false;
+// 첫 화면(pg-welcome)은 HTML에 이미 active 클래스가 박혀 있어 showPage()를 거치지 않고 바로 표시되므로,
+// 초기값을 false로 두면 첫 화면에서는 배경음악이 재생되지 않는 문제가 있었다. pg-welcome도 배경음악이
+// 나와야 하는 화면이므로 true로 시작한다(이후 게임 화면 진입 시 showPage()가 알맞은 트랙으로 바꿔준다).
+// [수정] 게임 화면에서 배경음악을 완전히 끄지 않고, bgm-game(the_mountain-kid) 트랙으로 바꿔서 재생한다.
+// 트랙 전환 시 이전 트랙은 확실히 멈춰서 두 곡이 겹쳐 들리지 않게 한다.
+let currentBgmKey = 'intro'; // 'intro' | 'game' — 지금 재생 대상이 어느 화면용 트랙인지
+
+function syncBgmAudio() {
+    if (bgmIntro) bgmIntro.muted = !audioUnlocked;
+    if (bgmGame) bgmGame.muted = !audioUnlocked;
+}
+
+function updateMusicIcon() {
+    const icon = document.getElementById('music-toggle-icon');
+    const muted = currentBgmKey === 'game' ? gameBgmMuted : bgmMuted;
+    if (icon) icon.className = muted ? 'fa-solid fa-volume-xmark' : 'fa-solid fa-music';
+}
+
+function applyBgmState() {
+    const active = currentBgmKey === 'game' ? bgmGame : bgmIntro;
+    const inactive = currentBgmKey === 'game' ? bgmIntro : bgmGame;
+    const muted = currentBgmKey === 'game' ? gameBgmMuted : bgmMuted;
+    if (inactive && !inactive.paused) inactive.pause();
+    if (!active) return;
+    // 백그라운드(화면 꺼짐·다른 앱)에서는 틀지 않는다. 돌아오면 onPageVisibility 가 다시 부른다
+    if (muted || document.hidden) { active.pause(); return; }
+    syncBgmAudio();
+    if (active.paused) active.play().catch(() => {});
+}
+
+// key: 'intro' (인트로/설정 화면 트랙) / 'game' (실제 게임 화면 트랙 - the_mountain-kid)
+function playBgm(key) {
+    const newKey = (key === 'game') ? 'game' : 'intro';
+    // 게임 화면에 새로 들어올 때마다 항상 꺼진 상태로 시작한다
+    if (newKey === 'game' && currentBgmKey !== 'game') gameBgmMuted = true;
+    currentBgmKey = newKey;
+    applyBgmState();
+    updateMusicIcon();
+}
+
+function toggleMusic() {
+    if (currentBgmKey === 'game') {
+        gameBgmMuted = !gameBgmMuted;
+    } else {
+        bgmMuted = !bgmMuted;
+    }
+    applyBgmState();
+    updateMusicIcon();
+}
+
+function initBgm() {
+    applyBgmState();
+    updateMusicIcon();
+    updateSfxIcon();
+    const unlockAudio = () => {
+        audioUnlocked = true;
+        applyBgmState();
+        document.removeEventListener('pointerdown', unlockAudio);
+        document.removeEventListener('keydown', unlockAudio);
+        document.removeEventListener('touchstart', unlockAudio);
+    };
+    document.addEventListener('pointerdown', unlockAudio);
+    document.addEventListener('keydown', unlockAudio);
+    document.addEventListener('touchstart', unlockAudio);
+}
+window.addEventListener('load', initBgm);
+
+/* ================= SFX ON/OFF ================= */
+// 배경음악과 별개로 효과음(카운트다운·성공·실패·완주 축하음 등)만 따로 끌 수 있다.
+// 공용 기기에서 이전 사용자의 선택이 남지 않도록 localStorage에는 저장하지 않는다.
+let sfxMuted = false;
+function updateSfxIcon() {
+    const icon = document.getElementById('sfx-toggle-icon');
+    if (icon) icon.className = sfxMuted ? 'fa-solid fa-bell-slash' : 'fa-solid fa-bell';
+}
+function toggleSfx() {
+    sfxMuted = !sfxMuted;
+    updateSfxIcon();
+}
+
+/* ================= FULLSCREEN ================= */
+// iOS Safari는 일반 요소의 전체화면 API 자체를 지원하지 않아 아래 폴백으로도 해결되지 않음.
+// 구형 안드로이드 브라우저/인앱 웹뷰 대응용 webkit 접두사 폴백만 추가.
+function getFullscreenElement() {
+    return document.fullscreenElement || document.webkitFullscreenElement;
+}
+function toggleFullscreen() {
+    const el = document.documentElement;
+    if (!getFullscreenElement()) {
+        const request = el.requestFullscreen || el.webkitRequestFullscreen;
+        if (request) {
+            const result = request.call(el);
+            if (result && result.catch) result.catch(() => {});
+        }
+    } else {
+        const exit = document.exitFullscreen || document.webkitExitFullscreen;
+        if (exit) exit.call(document);
+    }
+}
+function updateFullscreenIcon() {
+    const icon = document.getElementById('fullscreen-toggle-icon');
+    if (icon) icon.className = getFullscreenElement() ? 'fa-solid fa-compress' : 'fa-solid fa-expand';
+}
+document.addEventListener('fullscreenchange', updateFullscreenIcon);
+document.addEventListener('webkitfullscreenchange', updateFullscreenIcon);
+
+// 단원 단어는 unit-data.js(UNIT_DATA)에서, 지금 단원은 unit.js(UNIT)에서 가져온다.
+
+const masterColors = [
+  {id:'red',    name:'1팀', hex:'#F0604F', text:'#ffffff', def:'팀 이름'},
+  {id:'blue',   name:'2팀', hex:'#3592DE', text:'#ffffff', def:'팀 이름'},
+  {id:'yellow', name:'3팀', hex:'#E6A62A', text:'#ffffff', def:'팀 이름'},
+  {id:'green',  name:'4팀', hex:'#63B646', text:'#ffffff', def:'팀 이름'},
+  {id:'pink',   name:'5팀', hex:'#E56AA6', text:'#ffffff', def:'팀 이름'},
+  {id:'black',  name:'6팀', hex:'#9068D2', text:'#ffffff', def:'팀 이름'},
+];
+
+let words = []; 
+const cellCount = 16;
+let page = 'welcome', groupCount = 6, groupNames = {}, roundNum = 1, revIdx = -1, lastRec = null, history = [], startTime = null, timerOn = false, success = false, pausedMs = 0, pauseAt = null;
+const MAX_ROUND_RETRIES = 3; // 한 라운드에서 기록 단축에 실패했을 때 다시 도전할 수 있는 최대 횟수
+let failStreak = 0; // 현재 라운드에서 연속으로 실패한 횟수(재도전 횟수 제한용)
+let selectedGrade = null; // 단원 목록 화면에서 고른 학년
+let gameStarted = false;
+let countdownActive = false;
+let countdownTimerId = null;
+let startOverlay = null;
+let startBtn = null;
+let countEl = null;
+let startRoundLabel = null;
+
+masterColors.forEach(c => groupNames[c.id] = c.def);
+
+const grid = document.getElementById('colorGrid');
+const roundDisp = document.getElementById('roundDisp');
+const roundLabel = document.getElementById('roundLabel');
+const recDisp = document.getElementById('recDisp');
+const recHint = document.getElementById('recHint');
+const nextBtn = document.getElementById('nextBtn');
+const resModal = document.getElementById('resModal');
+const resBox = document.getElementById('resBox');
+const resTime = document.getElementById('resTime');
+const resMsg = document.getElementById('resMsg');
+const resBtns = document.getElementById('resBtns');
+const resCharImg = document.getElementById('resCharImg');
+const repModal = document.getElementById('repModal');
+const repBody = document.getElementById('repBody');
+const dashboard = document.getElementById('dashboard');
+const htpModal = document.getElementById('htpModal');
+const exitConfirmModal = document.getElementById('exitConfirmModal');
+const groupGrid = document.getElementById('groupGrid');
+const countDisp = document.getElementById('countDisp');
+startOverlay = document.getElementById('startOverlay');
+startBtn = document.getElementById('startBtn');
+countEl = document.getElementById('count');
+startRoundLabel = document.getElementById('startRoundLabel');
+
+// 우클릭 컨텍스트 메뉴 차단 (게임 화면 전체)
+document.addEventListener('contextmenu', e => e.preventDefault());
+
+// 팝업 닫는 방법 다양화: 배경(어두운 바깥 영역) 클릭 / ESC 키로도 닫히게 한다.
+// how-to-play 팝업은 기존 closeHTP()를 그대로 써서 타이머 일시정지 해제까지 같이 처리한다.
+function closeModalWrap(wrap) {
+    if (!wrap || !wrap.classList.contains('active')) return;
+    if (wrap === htpModal) { closeHTP(); return; }
+    if (wrap === exitConfirmModal) { closeExitConfirm(); return; }
+    wrap.classList.remove('active');
+}
+
+// [추가] 실제 게임 화면(pg-game)에서 홈/뒤로가기를 누르면 뜨는 종료 확인 팝업.
+// how-to-play 팝업과 같은 방식(pauseAt/pausedMs/timerOn)으로 타이머를 일시정지했다가,
+// 계속하기를 누르면 그대로 이어서 흐르게 하고, 나가기를 누르면 원래 하려던 이동을 실행한다.
+let pendingExitAction = null;
+function requestExitConfirm(action) {
+    pendingExitAction = action;
+    if (page === 'pg-game' && timerOn) {
+        pauseAt = Date.now();
+        timerOn = false;
+    }
+    // [수정] 카운트다운(3,2,1,GO) 도중에 종료 확인창을 열면, 타이머만 멈출 뿐 카운트다운
+    // setTimeout 체인은 그대로 흘러가서 팝업이 떠 있는 채로 라운드가 시작돼버렸다.
+    // 카운트다운을 완전히 취소하고 "스페이스 바를 눌러 시작하세요" 상태로 되돌린다
+    // (취소 후 "계속하기"를 누르면 다시 스페이스를 눌러 시작해야 한다).
+    if (countdownActive) {
+        if (countdownTimerId) { clearTimeout(countdownTimerId); countdownTimerId = null; }
+        countdownActive = false;
+        const startCard = document.querySelector('#startOverlay .start-card');
+        if (startCard) startCard.classList.remove('is-counting');
+        if (startBtn) startBtn.style.display = '';
+        if (countEl) { countEl.className = 'count'; countEl.innerHTML = ''; }
+    }
+    exitConfirmModal.classList.add('active');
+}
+function closeExitConfirm() {
+    exitConfirmModal.classList.remove('active');
+    if (page === 'pg-game' && pauseAt) {
+        pausedMs += Date.now() - pauseAt;
+        pauseAt = null;
+        timerOn = true;
+    }
+    pendingExitAction = null;
+}
+function confirmExitProceed() {
+    exitConfirmModal.classList.remove('active');
+    pauseAt = null;
+    const action = pendingExitAction;
+    pendingExitAction = null;
+    if (action) action();
+}
+// [수정] 라운드 결과(resModal)나 최종 기록(repModal)이 떠 있어도, 그 결과 화면 자체를
+// 못 보고 나가는 것이므로 확인 없이 바로 이동하면 안 된다. 종료 확인창은 이 팝업들보다
+// DOM에서 뒤에 있어 z-index가 같아도 그 위에 뜨고, "계속하기"를 누르면 결과 팝업이 그대로
+// 남아있는다(requestExitConfirm이 resModal/repModal을 미리 닫지 않기 때문).
+// 상단 네비 홈 버튼: goBackGlobal()과 달리 exitGameToHome()이 화면 구분 없이 바로 호출돼서
+// 여기서 직접 pg-game 여부를 확인해 종료 확인 팝업을 끼워 넣는다.
+function homeButtonClicked() {
+    if (page === 'pg-game') { requestExitConfirm(exitGameToHome); return; }
+    exitGameToHome();
+}
+// [수정] 라운드 성공/실패 결과 팝업(resModal)은 배경 클릭/ESC로 그냥 닫히면 안 된다 -
+// 다음 라운드로 넘어가는 로직이 팝업의 버튼 클릭에 걸려 있어서, 버튼을 안 누르고 배경만
+// 닫으면 다음 라운드로 넘어가지 못한 채 게임이 멈춘 것처럼 보인다. resModal은 반드시
+// 팝업 안의 버튼으로만 닫히도록 제외한다.
+document.querySelectorAll('.modal-wrap:not(#resModal)').forEach(wrap => {
+    wrap.addEventListener('click', e => {
+        if (e.target === wrap) closeModalWrap(wrap);
+    });
+});
+window.addEventListener('keydown', e => {
+    if (e.key !== 'Escape') return;
+    document.querySelectorAll('.modal-wrap.active:not(#resModal)').forEach(closeModalWrap);
+});
+
+function showPage(pageId) {
+    // Home/뒤로/앞으로를 포함해 화면이 바뀌는 모든 경로가 이 함수를 거치므로,
+    // 어느 화면에서 어떤 팝업(도움말/라운드 결과/기록)이 떠 있었든 화면 전환 시 항상 같이 닫는다.
+    document.querySelectorAll('.modal-wrap.active').forEach(w => w.classList.remove('active'));
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    const target = document.getElementById(pageId);
+    if(target) target.classList.add('active');
+    
+    const container = document.querySelector('.game-container');
+    if (pageId === 'pg-welcome') {
+        container.style.background = "url('0.png') center / 100% 100% no-repeat";
+    } else if (pageId === 'pg-game') {
+        container.style.background = 'linear-gradient(180deg, #77C6F2, #9AD8FA 40%, #C9EAFC)';
+    } else {
+        container.style.background = 'linear-gradient(180deg, #77C6F2, #9AD8FA 40%, #C9EAFC)';
+    }
+    
+    const htpBtn = document.getElementById('htpBtn');
+    if(htpBtn) htpBtn.style.display = (pageId === 'pg-setup' || pageId === 'pg-game') ? 'block' : 'none';
+
+    page = pageId;
+
+    // 상단 좌측 고정 Home/Back/Forward 버튼: pick the word와 동일하게 항상 표시하되,
+    // 해당 화면에서 의미가 없는 버튼만 흐리게 비활성화한다(완전히 숨기지 않음).
+    updateNavButtonStates();
+
+    if(pageId === 'pg-category') {
+        initCategoryMenu();
+    }
+
+    playBgm(pageId === 'pg-game' ? 'game' : 'intro');
+}
+
+// 1. 메인화면 -> 팀 설정 열기 (주소에 단원이 없으면 단원 목록 화면으로)
+function goToSetupFirst() {
+    if (!UNIT.current) { showPage('pg-category'); return; }
+    showPage('pg-setup');
+    renderGroups();
+}
+
+// 2. 팀 설정 완료 -> 바로 이번 단원 게임 시작
+function goToCategoryAfterSetup() {
+    saveNames();
+    if (!UNIT.current) { showPage('pg-category'); return; }
+    launchGameAfterSelection();
+}
+
+// 뒤로가기: 선택 단계 페이지 자유 이동
+function goBackToWelcome() {
+    showPage('pg-welcome');
+}
+function goBackToCategory() {
+    showPage('pg-category');
+}
+
+// 팀 설정/단원 목록 화면 공용 '처음으로' 버튼 - 어느 단계에서든 타이틀 화면으로 바로 이동
+function goHomeFromSelection() {
+    showPage('pg-welcome');
+}
+
+// 팀 설정 화면 '앞으로' 버튼 - 하단 Game Start 버튼과 동일
+function forwardFromSetup() {
+    goToCategoryAfterSetup();
+}
+
+// 학년 화면 '앞으로' 버튼 - 이미 골랐던 학년이 있으면 그 단원 화면으로 다시 이동
+function forwardFromCategory() {
+    if (!selectedGrade) {
+        alert("먼저 학년을 선택해 주세요.");
+        return;
+    }
+    selectCategory(selectedGrade);
+}
+
+// 상단 좌측 고정 Back/Forward 버튼 - 현재 화면이 어디인지에 따라 알맞은 이동 함수로 연결한다
+// 게임 중 뒤로가기는 팀 설정 화면으로 간다(팀만 바꿔서 같은 단원을 다시 하기 좋게).
+function goBackGlobal() {
+    if (page === 'pg-setup') goBackToWelcome();
+    else if (page === 'pg-category') goBackToWelcome();
+    else if (page === 'pg-subcategory') goBackToCategory();
+    else if (page === 'pg-game') {
+        requestExitConfirm(exitGameToSetup);
+    }
+}
+function goForwardGlobal() {
+    if (page === 'pg-welcome') goToSetupFirst();
+    else if (page === 'pg-setup') forwardFromSetup();
+    else if (page === 'pg-category') forwardFromCategory();
+    // pg-subcategory: 단원을 눌러야 이동하므로 앞으로 갈 곳이 없다
+}
+
+// [추가] 상단 고정 Home/Back/Forward 버튼 - pick the word와 동일하게 완전히 숨기지 않고,
+// 해당 화면에서 의미가 없는 버튼만 흐리게 비활성화한다.
+function updateNavButtonStates() {
+    const isWelcome = (page === 'pg-welcome');
+    const isGame = (page === 'pg-game');
+    const backBtn = document.getElementById('game-back-btn');
+    const homeBtn = document.getElementById('game-home-btn');
+    const fwdBtn = document.getElementById('game-forward-btn');
+    [backBtn, homeBtn].forEach(btn => {
+        if (!btn) return;
+        btn.disabled = isWelcome;
+    });
+    if (fwdBtn) fwdBtn.disabled = isGame || page === 'pg-subcategory';
+}
+
+// 단원 목록 화면 1: 학년 버튼
+function initCategoryMenu() {
+  const gridMenu = document.getElementById("category-menu-grid");
+  gridMenu.innerHTML = "";
+  UNIT.grades().forEach(grade => {
+    const btn = document.createElement("button");
+    btn.className = "menu-box-btn";
+    btn.innerHTML = `${grade}학년<span class="eng-sub">Grade ${grade}</span><span>(${UNIT.unitsOf(grade).length}개 단원)</span>`;
+    btn.onclick = () => selectCategory(grade);
+    gridMenu.appendChild(btn);
+  });
+}
+
+// 단원 목록 화면 2: 고른 학년의 단원 버튼 - 누르면 그 단원 주소로 이동
+function selectCategory(grade) {
+  selectedGrade = grade;
+  showPage('pg-subcategory');
+  document.getElementById("subcategory-heading").textContent = `${grade}학년 단원을 선택하세요.`;
+
+  const subGrid = document.getElementById("subcategory-menu-grid");
+  subGrid.innerHTML = "";
+  UNIT.unitsOf(grade).forEach(u => {
+    const t = UNIT.splitTitle(u);
+    const wordList = u.words.map(w => w.en);
+    const btn = document.createElement("button");
+    btn.className = "menu-box-btn unit-btn";
+    btn.innerHTML = `${t.lesson}<span class="eng-sub">${t.name}</span><div class="word-tooltip">${wordList.join(', ')}</div>`;
+    btn.onclick = () => UNIT.go(u.key);
+    subGrid.appendChild(btn);
+  });
+}
+
+// 3. 이번 단원 단어로 실제 게임판 시작
+function launchGameAfterSelection() {
+    words = UNIT.words.slice();
+    if (!words.length) { showPage('pg-category'); return; }
+
+    showPage('pg-game');
+    roundNum = 1;
+    roundDisp.textContent = `ROUND 1 / 5`;
+    if (roundLabel) roundLabel.textContent = `진행 시간 · ROUND ${roundNum} / 5`;
+    updateDashboard();
+    updateTrackMarkers();
+    initGrid(true);
+}
+
+// 단원 표시: 인트로·팀 설정 화면에 지금 단원 이름을 보여 주고, 단원이 없으면 시작 버튼을 '단원 선택하기'로
+(function showUnitLabel() {
+    document.querySelectorAll('[data-unit-label]').forEach(el => {
+        el.textContent = UNIT.label();
+        el.hidden = !UNIT.current;
+    });
+    if (!UNIT.current) document.getElementById('welcome-start-btn').textContent = '단원 선택하기';
+})();
+
+function updateTimer() {
+    if (timerOn && startTime) {
+        const elapsed = (Date.now() - startTime - pausedMs) / 1000;
+        const timerBig = document.querySelector('#timerDisp .big');
+        if (timerBig) timerBig.textContent = `${elapsed.toFixed(2)}`;
+    }
+}
+setInterval(updateTimer, 50);
+
+function showStartOverlay() {
+    if (startOverlay) startOverlay.style.display = 'grid';
+    if (startRoundLabel) startRoundLabel.textContent = `ROUND ${roundNum} / 5`;
+    if (startBtn) startBtn.style.display = 'inline-flex';
+    const startCard = document.querySelector('#startOverlay .start-card');
+    if (startCard) startCard.classList.remove('is-counting');
+    if (countEl) {
+        countEl.className = 'count';
+        countEl.innerHTML = '';
+    }
+}
+
+function hideStartOverlay() {
+    if (startOverlay) startOverlay.style.display = 'none';
+}
+
+function beginRound() {
+    gameStarted = true;
+    countdownActive = false;
+    timerOn = true;
+    pausedMs = 0;
+    pauseAt = null;
+    startTime = Date.now();
+    const startCard = document.querySelector('#startOverlay .start-card');
+    if (startCard) startCard.classList.remove('is-counting');
+    hideStartOverlay();
+}
+
+function startCountdown() {
+    if (gameStarted || countdownActive) return;
+    countdownActive = true;
+    const startCard = document.querySelector('#startOverlay .start-card');
+    if (startCard) startCard.classList.add('is-counting');
+    if (startBtn) startBtn.style.display = 'none';
+    if (countEl) {
+        countEl.className = 'count show';
+        const seq = ['3', '2', '1', 'GO!'];
+        let i = 0;
+        const step = () => {
+            if (!countEl) return;
+            countEl.innerHTML = `<span class="n">${seq[i]}</span>`;
+            playCountdownSound(seq[i]);
+            i += 1;
+            if (i < seq.length) {
+                countdownTimerId = setTimeout(step, 800);
+            } else {
+                countdownTimerId = setTimeout(beginRound, 500);
+            }
+        };
+        step();
+    } else {
+        beginRound();
+    }
+}
+
+/* [수정 10/20] 아이패드(사파리·크롬)에서 효과음이 도중에 끊기던 문제.
+   예전에는 소리를 낼 때마다 new AudioContext() 를 새로 만들었는데, 아이패드는 한 페이지에서
+   만들 수 있는 AudioContext 수가 적고(몇 개 넘으면 더 안 만들어짐) 터치 밖에서 만든 것은
+   멈춘 채로 시작해서, 몇 판 하다 보면 소리가 안 났다. 이제 하나(sfxCtx)만 만들어 계속 쓰고,
+   화면을 잠갔다 켜거나 다른 앱에 다녀와 멈춰 있으면 다음 터치 때 다시 깨운다 */
+let sfxCtx = null;
+function getSfxCtx(){
+  const A = window.AudioContext || window.webkitAudioContext; if(!A) return null;
+  if (!sfxCtx) { try { sfxCtx = new A(); } catch(e) { return null; } }
+  if (sfxCtx.state !== 'running' && !document.hidden) sfxCtx.resume().catch(()=>{});
+  return sfxCtx;
+}
+// 아이폰 무음 스위치를 켜 둬도 효과음이 배경음악처럼 나오게 한다 (iOS 17 이상)
+try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch(e) {}
+['pointerdown','touchstart','touchend','keydown'].forEach(t =>
+  document.addEventListener(t, () => { getSfxCtx(); }, true));
+
+function playWelcomeSound(){
+  if (sfxMuted) return;
+  try {
+    const c = getSfxCtx(); if(!c) return;
+    const now = c.currentTime, notes = [110,147,196,294,220,440], durs = [.08,.08,.08,.12,.1,.4];
+    let t = 0;
+    notes.forEach((f,i)=>{
+      const o=c.createOscillator(),g=c.createGain();
+      o.type=i===notes.length-1?'sawtooth':'triangle'; o.frequency.setValueAtTime(f,now+t);
+      if(i===notes.length-1) o.frequency.exponentialRampToValueAtTime(880,now+t+durs[i]);
+      g.gain.setValueAtTime(.34,now+t); g.gain.exponentialRampToValueAtTime(.01,now+t+durs[i]);
+      o.connect(g); g.connect(c.destination); o.start(now+t); o.stop(now+t+durs[i]); t+=durs[i]-.02
+    });
+  } catch(e){}
+}
+
+function playCountdownSound(label){
+  if (sfxMuted) return;
+  try {
+    const c = getSfxCtx(); if(!c) return;
+    const now = c.currentTime;
+    const osc = c.createOscillator();
+    const gain = c.createGain();
+    osc.connect(gain);
+    gain.connect(c.destination);
+    gain.gain.setValueAtTime(0.0001, now);
+
+    if (label === 'GO!') {
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(920, now);
+      gain.gain.exponentialRampToValueAtTime(0.55, now + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.24);
+      osc.start(now);
+      osc.stop(now + 0.24);
+    } else {
+      osc.type = 'sine';
+      const pitch = 520 - (Number(label) - 1) * 40;
+      osc.frequency.setValueAtTime(pitch, now);
+      gain.gain.exponentialRampToValueAtTime(0.5, now + 0.04);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.18);
+      osc.start(now);
+      osc.stop(now + 0.18);
+    }
+  } catch(e){}
+}
+
+function goSetup(){
+  playWelcomeSound();
+  repModal.classList.remove('active');
+  resModal.classList.remove('active');
+  showPage('pg-setup'); // 재설정 시 팀 설정부터 처음 순서대로 진입
+}
+
+// 게임 화면 전용 홈/뒤로 버튼: 진행 중이던 타이머·모달을 정리하고 이동
+function exitGameToHome() {
+  if (countdownTimerId) { clearTimeout(countdownTimerId); countdownTimerId = null; }
+  timerOn = false;
+  gameStarted = false;
+  countdownActive = false;
+  repModal.classList.remove('active');
+  resModal.classList.remove('active');
+  showPage('pg-welcome');
+}
+
+// 게임 중 뒤로가기: 팀 설정 화면으로 (단원 버전은 소분류 화면이 없다)
+function exitGameToSetup() {
+  if (countdownTimerId) { clearTimeout(countdownTimerId); countdownTimerId = null; }
+  timerOn = false;
+  gameStarted = false;
+  countdownActive = false;
+  repModal.classList.remove('active');
+  resModal.classList.remove('active');
+  showPage('pg-setup');
+  renderGroups();
+}
+
+// 라운드 성공(기록 단축 성공) 시 재생되는 상승 아르페지오
+function playSuccess(){
+  if (sfxMuted) return;
+  try{
+    const c=getSfxCtx(); if(!c)return;
+    const now=c.currentTime;
+    [440, 554, 659, 880].forEach((f, i) => {
+      const o=c.createOscillator(),g=c.createGain(); o.type='sine'; o.frequency.setValueAtTime(f, now + i*0.15);
+      g.gain.setValueAtTime(0.55, now + i*0.15); g.gain.exponentialRampToValueAtTime(0.01, now + i*0.15 + 0.3);
+      o.connect(g); g.connect(c.destination); o.start(now + i*0.15); o.stop(now + i*0.15 + 0.3);
+    });
+  }catch(e){}
+}
+
+// 라운드 실패(기록 단축 실패) 시 재생되는 하강 톤 - 성공음과 뚜렷하게 구분되도록 저음/단조로 설계
+function playFail(){
+  if (sfxMuted) return;
+  try{
+    const c=getSfxCtx(); if(!c)return;
+    const now=c.currentTime;
+    [392, 349, 293].forEach((f, i) => {
+      const o=c.createOscillator(),g=c.createGain(); o.type='sawtooth'; o.frequency.setValueAtTime(f, now + i*0.14);
+      g.gain.setValueAtTime(0.32, now + i*0.14); g.gain.exponentialRampToValueAtTime(0.01, now + i*0.14 + 0.26);
+      o.connect(g); g.connect(c.destination); o.start(now + i*0.14); o.stop(now + i*0.14 + 0.26);
+    });
+  }catch(e){}
+}
+
+// 전체 5라운드를 모두 완주했을 때 재생되는 화려한 팡파레
+function playRaceComplete(){
+  if (sfxMuted) return;
+  try{
+    const c=getSfxCtx(); if(!c)return;
+    const now=c.currentTime;
+    [523, 659, 784, 1047, 784, 1047].forEach((f, i) => {
+      const o=c.createOscillator(),g=c.createGain(); o.type= i%2===0 ? 'triangle' : 'square'; o.frequency.setValueAtTime(f, now + i*0.13);
+      g.gain.setValueAtTime(0.4, now + i*0.13); g.gain.exponentialRampToValueAtTime(0.01, now + i*0.13 + 0.35);
+      o.connect(g); g.connect(c.destination); o.start(now + i*0.13); o.stop(now + i*0.13 + 0.35);
+    });
+  }catch(e){}
+}
+
+// 컨페티(색종이) 연출: 외부 라이브러리 없이 순수 DOM/CSS로 구현.
+// count가 클수록(완주 축하) 더 풍성하게, 라운드 성공 시엔 적당히 표시한다.
+function spawnConfetti(count){
+  const layer = document.getElementById('confettiLayer');
+  if (!layer) return;
+  const colors = ['#F0604F', '#E6A62A', '#63B646', '#3592DE', '#9068D2', '#E56AA6', '#fbbf24'];
+  for (let i = 0; i < count; i++) {
+    const piece = document.createElement('div');
+    piece.className = 'confetti-piece';
+    const color = colors[Math.floor(Math.random() * colors.length)];
+    const left = Math.random() * 100;
+    const delay = Math.random() * 0.4;
+    const duration = 1.8 + Math.random() * 1.4;
+    const size = 6 + Math.random() * 8;
+    piece.style.left = left + '%';
+    piece.style.background = color;
+    piece.style.width = size + 'px';
+    piece.style.height = (size * 1.6) + 'px';
+    piece.style.animationDuration = duration + 's';
+    piece.style.animationDelay = delay + 's';
+    piece.style.borderRadius = (Math.random() > 0.5) ? '50%' : '2px';
+    layer.appendChild(piece);
+    setTimeout(() => piece.remove(), (duration + delay) * 1000 + 200);
+  }
+}
+
+function chgCount(d){
+  const n=groupCount+d;
+  if(n>=2&&n<=6){
+    saveNames();groupCount=n;countDisp.textContent=n;renderGroups();
+    countDisp.classList.remove('pop');
+    void countDisp.offsetWidth;
+    countDisp.classList.add('pop');
+  }
+}
+function saveNames(){
+  masterColors.slice(0,groupCount).forEach(c=>{
+    const el=document.getElementById('inp-'+c.id);
+    if(el)groupNames[c.id]=el.value.trim().slice(0,8)||c.def;
+  });
+}
+function renderGroups(){
+  groupGrid.innerHTML='';
+  masterColors.slice(0,groupCount).forEach(c=>{
+    const val=groupNames[c.id]||c.def;
+    const card=document.createElement('div');
+    card.className='group-card';
+    card.style.setProperty('--team-c', c.hex);
+    card.innerHTML=`<svg class="car-ico" viewBox="0 0 24 24" fill="${c.hex}"><path d="M5 11l1.5-4A2 2 0 018.4 6h7.2a2 2 0 011.9 1.3L19 11h1a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 11-4 0H9a2 2 0 11-4 0H4a1 1 0 01-1-1v-3a1 1 0 011-1z"/></svg><label style="font-family:var(--f-num);font-weight:800;font-size:1.5rem;letter-spacing:1px;margin-bottom:6px;margin-top:10px;color:${c.hex}">${c.name}</label><input type="text" id="inp-${c.id}" class="group-input" value="${val}" maxlength="8">`;
+    const inp=card.querySelector('input');
+    inp.addEventListener('keydown',e=>{if(e.key==='Enter')inp.blur();});
+    inp.addEventListener('focus',()=>{if(inp.value===c.def)inp.value='';});
+    inp.addEventListener('blur',()=>{if(!inp.value.trim())inp.value=c.def;});
+    // [수정] 한글은 IME 조합 중에는 브라우저가 maxlength를 바로 적용하지 않아 8자를 넘겨
+    // 입력할 수 있었다(다른 곳을 클릭해야 saveNames()의 slice(0,8)로 뒤늦게 잘림). 입력
+    // 즉시 8자로 잘라 타이핑하는 동안에도 넘어가지 않게 한다.
+    inp.addEventListener('input',()=>{if(inp.value.length>8)inp.value=inp.value.slice(0,8);});
+    groupGrid.appendChild(card);
+  });
+}
+
+function updateDashboard() {
+    dashboard.innerHTML = '';
+    masterColors.slice(0, groupCount).forEach(c => {
+        const nm = groupNames[c.id] || c.def;
+        const b = document.createElement('div');
+        b.className = 'chip';
+        b.style.setProperty('--chip-bg', c.hex);
+        b.innerHTML = `<svg class="car" viewBox="0 0 24 24" fill="currentColor"><path d="M5 11l1.5-4A2 2 0 018.4 6h7.2a2 2 0 011.9 1.3L19 11h1a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 11-4 0H9a2 2 0 11-4 0H4a1 1 0 01-1-1v-3a1 1 0 011-1z"/></svg><span>${nm}</span>`;
+        dashboard.appendChild(b);
+    });
+}
+
+function updateTrackMarkers() {
+    const markers = document.querySelectorAll('#pg-game .track .cp');
+    markers.forEach((marker, index) => {
+        marker.classList.remove('done', 'now');
+        if (index + 1 < roundNum) {
+            marker.classList.add('done');
+        } else if (index + 1 === roundNum) {
+            marker.classList.add('now');
+        }
+    });
+}
+
+function getColors(){
+  let res = [];
+  let active = masterColors.slice(0, groupCount).map(c => c.hex);
+  const base = Math.floor(cellCount / active.length);
+  active.forEach(col => {
+    for (let j = 0; j < base; j++) res.push(col);
+  });
+  let extraColors = [...active];
+  for (let i = extraColors.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [extraColors[i], extraColors[j]] = [extraColors[j], extraColors[i]];
+  }
+  const remaining = cellCount - res.length;
+  for (let i = 0; i < remaining; i++) {
+    res.push(extraColors[i]);
+  }
+  for (let i = res.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [res[i], res[j]] = [res[j], res[i]];
+  }
+  return res;
+}
+
+function getWords(){
+  let sel=[], tmp=[...words];
+  for(let i=0;i<cellCount;i++){
+    if(!tmp.length) tmp=[...words];
+    sel.push(tmp.splice(Math.floor(Math.random()*tmp.length),1)[0]);
+  }
+  return sel;
+}
+
+function initGrid(reset=false){
+    grid.innerHTML=''; revIdx=-1; nextBtn.classList.remove('visible');
+    resModal.classList.remove('active'); repModal.classList.remove('active'); resBox.classList.remove('fail'); resBox.classList.remove('success-flash');
+    pausedMs=0; pauseAt=null;
+    gameStarted = false;
+    countdownActive = false;
+    timerOn = false;
+    startTime = null;
+    if(reset){
+        roundNum=1; lastRec=null; history=[]; failStreak=0;
+        roundDisp.textContent='ROUND 1 / 5';
+        if (roundLabel) roundLabel.textContent = `진행 시간 · ROUND ${roundNum} / 5`;
+        const recValue = document.querySelector('#recDisp .v');
+        if (recValue) recValue.textContent = '없음';
+        // 1라운드는 아직 깰 기록이 없어서 "이 기록보다 빨라야 통과됩니다" 문구가 의미 없으므로 숨긴다
+        if (recHint) recHint.style.display = 'none';
+        const timerBig = document.querySelector('#timerDisp .big');
+        if (timerBig) timerBig.textContent = '00.00';
+    }
+    updateTrackMarkers();
+    showStartOverlay();
+    const cols=getColors(), wrds=getWords();
+    for(let i=0; i<cellCount; i++){
+        const cell=document.createElement('div'); cell.className = wrds[i].length >= 10 ? 'cell long-word' : 'cell';
+        cell.style.setProperty('--cell-color', cols[i]);
+        cell.innerHTML = `<span class="num">${String(i+1).padStart(2,'0')}</span><div class="overlay" id="ov-${i}">?</div><span class="word">${wrds[i]}</span>`;
+        grid.appendChild(cell);
+    }
+}
+
+function fmt(s){
+  if(s===null) return '없음';
+  if(s>=60){ const m=Math.floor(s/60), r=(s%60).toFixed(2); return `${m}분 ${r}초`; }
+  return `${s.toFixed(2)}초`;
+}
+
+function showResult(dur) {
+    resTime.textContent = fmt(dur);
+    resBtns.innerHTML = '';
+    const isFinalRound = (roundNum === 5);
+
+    if (lastRec === null || dur < lastRec) {
+        success = true;
+        failStreak = 0;
+        history.push({ round: roundNum, time: dur });
+        lastRec = dur;
+
+        if (isFinalRound) {
+            resMsg.textContent = '기록 단축 성공! 결과를 확인해요.';
+            resBtns.innerHTML = `<button class="mbtn mbtn-next" onclick="exitGame()">결과 보기</button>`;
+        } else {
+            resMsg.textContent = roundNum === 1 ? '첫 라운드 완료!' : '기록 단축 성공! 다음 단계로 도전하세요.';
+            resBtns.innerHTML = `<button class="mbtn mbtn-exit" onclick="exitGame()">종료하기</button>
+                                 <button class="mbtn mbtn-next" onclick="handleNext()">다음 라운드</button>`;
+        }
+        // 성공 팝업: 기존 회색 텍스트는 흰 배경에서 대비가 낮아 읽기 어려웠으므로 뚜렷한 초록으로 변경
+        resMsg.style.color = '#15803d';
+        resTime.style.color = '#15803d';
+        resBox.classList.remove('fail');
+        resBox.classList.add('success-flash');
+        resCharImg.src = 's.png';
+        resCharImg.alt = '라운드 성공';
+        resCharImg.hidden = false;
+        removeWhiteBackground(resCharImg);
+        nextBtn.classList.add('visible');
+        playSuccess();
+        spawnConfetti(45);
+    } else {
+        success = false;
+        failStreak++;
+        resBox.classList.remove('success-flash');
+        resBox.classList.add('fail');
+        resCharImg.src = 'f.png';
+        resCharImg.alt = '라운드 실패';
+        resCharImg.hidden = false;
+        removeWhiteBackground(resCharImg);
+        nextBtn.classList.remove('visible');
+
+        resTime.style.color = '#b91c1c';
+        if (failStreak > MAX_ROUND_RETRIES) {
+            // 재도전 횟수(3회) 초과: 더 이상 재도전을 제공하지 않고 격려 메시지와 종료 버튼만 표시
+            resMsg.textContent = '조금 더 연습해보세요!';
+            resMsg.style.color = '#b91c1c';
+            resBtns.innerHTML = `<button class="mbtn mbtn-exit" onclick="exitGame()">종료하기</button>`;
+        } else {
+            resMsg.textContent = `기록 단축 실패... (${fmt(lastRec)}보다 빨라야 함)`;
+            resMsg.style.color = '#b91c1c';
+            resBtns.innerHTML = `<button class="mbtn mbtn-exit" onclick="exitGame()">종료하기</button>
+                                 <button class="mbtn mbtn-retry" onclick="handleNext()">한 번 더 도전!</button>`;
+        }
+        playFail();
+    }
+    resModal.classList.add('active');
+}
+
+function handleNext(){
+    resModal.classList.remove('active');
+    if(success) {
+        if (roundNum >= 5) {
+            exitGame();
+            return;
+        }
+        roundNum++;
+        roundDisp.textContent = `ROUND ${roundNum} / 5`;
+        if (roundLabel) roundLabel.textContent = `진행 시간 · ROUND ${roundNum} / 5`;
+        updateTrackMarkers();
+        const recValue = document.querySelector('#recDisp .v');
+        if (recValue) recValue.textContent = fmt(lastRec);
+        if (recHint) recHint.style.display = ''; // 2라운드부터는 깰 기록이 생기므로 다시 표시
+        initGrid();
+    } else {
+        initGrid(); 
+    }
+}
+
+function exitGame(){
+  resModal.classList.remove('active');
+  repBody.innerHTML='';
+  if(!history.length){
+      repBody.innerHTML='<tr><td colspan="2" style="color:#64748b;text-align:center;padding:16px">기록이 없습니다.</td></tr>';
+  } else {
+      history.forEach(r=>{
+          const tr=document.createElement('tr');
+          tr.innerHTML=`<td>ROUND ${r.round}</td><td style="color:#fbbf24">${fmt(r.time)}</td>`;
+          repBody.appendChild(tr);
+      });
+  }
+  repModal.classList.add('active');
+
+  // 5라운드를 모두 성공적으로 완주했을 때만 별도의 완주 축하 팡파레 + 컨페티를 크게 터뜨린다.
+  if (history.length >= 5) {
+      playRaceComplete();
+      spawnConfetti(90);
+  }
+}
+
+function resetGame(){ repModal.classList.remove('active'); initGrid(true); }
+
+let htpSource = 'game';
+function openHTP(source) {
+    htpSource = source || 'game';
+    if (page === 'pg-game' && timerOn) {
+        pauseAt = Date.now();
+        timerOn = false;
+    }
+    // [수정] 카운트다운(3,2,1,GO) 도중에 How to Play를 열면, 팝업 뒤에서 카운트다운
+    // setTimeout 체인이 그대로 흘러가서 팝업이 떠 있는 채로 라운드가 시작돼버렸다.
+    // 카운트다운을 완전히 취소하고 "스페이스 바를 눌러 시작하세요" 상태로 되돌린다
+    // (닫은 뒤 스페이스바를 다시 눌러야 카운트다운이 새로 시작된다).
+    if (countdownActive) {
+        if (countdownTimerId) { clearTimeout(countdownTimerId); countdownTimerId = null; }
+        countdownActive = false;
+        const startCard = document.querySelector('#startOverlay .start-card');
+        if (startCard) startCard.classList.remove('is-counting');
+        if (startBtn) startBtn.style.display = '';
+        if (countEl) { countEl.className = 'count'; countEl.innerHTML = ''; }
+    }
+    document.getElementById('htpModal').classList.add('active');
+    document.getElementById('htp-gamestart-wrap').style.display = (htpSource === 'welcome') ? 'flex' : 'none';
+}
+
+/* [추가 10/20] 화면을 끄거나 다른 앱으로 가면(백그라운드) 배경음악을 멈추고 진행 시간도 멈춘다.
+   How to Play·종료 확인창과 같은 방식(pauseAt/pausedMs/timerOn)으로 멈추고, 3·2·1 카운트다운
+   중이었으면 취소해서 돌아왔을 때 스페이스를 다시 눌러 시작하게 한다.
+   돌아왔을 때 다른 팝업이 떠 있으면 시간은 그 팝업을 닫을 때 다시 흐른다 */
+let hiddenPausedTimer = false;
+function onPageVisibility() {
+    if (document.hidden) {
+        if (bgmIntro) bgmIntro.pause();
+        if (bgmGame) bgmGame.pause();
+        if (sfxCtx && sfxCtx.state === 'running') sfxCtx.suspend().catch(()=>{});
+        if (page === 'pg-game' && timerOn) {
+            pauseAt = Date.now();
+            timerOn = false;
+            hiddenPausedTimer = true;
+        }
+        if (countdownActive) {
+            if (countdownTimerId) { clearTimeout(countdownTimerId); countdownTimerId = null; }
+            countdownActive = false;
+            const startCard = document.querySelector('#startOverlay .start-card');
+            if (startCard) startCard.classList.remove('is-counting');
+            if (startBtn) startBtn.style.display = '';
+            if (countEl) { countEl.className = 'count'; countEl.innerHTML = ''; }
+        }
+    } else {
+        const popupOpen = document.getElementById('htpModal').classList.contains('active')
+            || exitConfirmModal.classList.contains('active');
+        if (hiddenPausedTimer && page === 'pg-game' && pauseAt && !popupOpen) {
+            pausedMs += Date.now() - pauseAt;
+            pauseAt = null;
+            timerOn = true;
+        }
+        hiddenPausedTimer = false;
+        applyBgmState();
+        getSfxCtx();
+    }
+}
+document.addEventListener('visibilitychange', onPageVisibility);
+window.addEventListener('pagehide', () => {
+    if (bgmIntro) bgmIntro.pause();
+    if (bgmGame) bgmGame.pause();
+});
+
+function closeHTP() {
+    document.getElementById('htpModal').classList.remove('active');
+    if (page === 'pg-game' && pauseAt) {
+        pausedMs += Date.now() - pauseAt;
+        pauseAt = null;
+        timerOn = true;
+    }
+}
+
+// [추가] How to Play에서 학습목표·게임방법 확인 후 바로 Game Start(팀 설정)로 이동
+function startFromHTP() {
+    closeHTP();
+    goToSetupFirst();
+}
+
+// 스페이스바 누르기와 동일한 동작. 물리 키보드가 없는 모바일에서
+// 화면의 스페이스 버튼을 탭했을 때도 이 함수를 그대로 호출한다.
+function triggerSpaceAction() {
+    if(htpModal.classList.contains('active')) return;
+    // [추가] 종료 확인 팝업이 떠 있는 동안은 게임 화면이 완전히 멈춰야 하므로,
+    // 스페이스바/모바일 스페이스 버튼 입력이 뒤에 있는 칸 공개·라운드 진행에 먹히지 않게 막는다.
+    if(exitConfirmModal.classList.contains('active')) return;
+
+    if(page === 'pg-setup') {
+        goToCategoryAfterSetup();
+        return;
+    }
+
+    if(page === 'pg-game') {
+        if(resModal.classList.contains('active') || repModal.classList.contains('active')) return;
+        if (!gameStarted && !countdownActive) {
+            startCountdown();
+            return;
+        }
+        if (!gameStarted) return;
+        if(revIdx < cellCount - 1) {
+            revIdx++;
+            const cell = grid.children[revIdx];
+            const ov = document.getElementById('ov-' + revIdx);
+            if(cell) { cell.classList.add('revealed'); fitCellWord(cell); }
+            if(ov) ov.classList.add('revealed');
+        }
+        else if(revIdx === cellCount - 1 && timerOn) {
+            // 라운드가 끝났을 때의 성공/실패 효과음은 기록 판정 결과에 따라 showResult()에서 재생한다
+            // (스페이스바를 누를 때마다 나던 효과음은 제거하고, 라운드 완료 시점에만 소리가 나도록 함).
+            const end = Date.now();
+            let off = pausedMs;
+            if(pauseAt) off += end - pauseAt;
+            timerOn = false;
+            showResult((end - startTime - off) / 1000);
+        }
+    }
+}
+
+window.addEventListener('keydown', e => {
+    if(e.code !== 'Space') return;
+    if(document.activeElement && document.activeElement.tagName === 'INPUT') return;
+    if(page === 'pg-welcome' || page === 'pg-category' || page === 'pg-subcategory') return;
+
+    if(!htpModal.classList.contains('active')) e.preventDefault();
+    else return;
+
+    triggerSpaceAction();
+});
+
+if (startBtn) {
+    startBtn.addEventListener('click', () => {
+        if (page === 'pg-game') startCountdown();
+    });
+}
+
+// 단어가 칸을 넘치면(긴 단어가 두 줄이 되어 위아래가 잘리거나, 한 단어가 칸 폭보다 길 때)
+// 칸에 들어갈 때까지 글자 크기를 조금씩 줄인다. 넘치지 않는 단어는 원래 크기 그대로 둔다
+function fitCellWord(cell) {
+    const word = cell.querySelector('.word');
+    if (!word || !cell.clientHeight) return;
+    word.style.fontSize = '';
+    const maxH = cell.clientHeight - 12; // .cell 위아래 padding 6px 씩
+    let size = parseFloat(getComputedStyle(word).fontSize);
+    while (size > 14 && (word.scrollWidth > word.clientWidth + 1 || word.offsetHeight > maxH)) {
+        size *= 0.92;
+        word.style.fontSize = size + 'px';
+    }
+}
+
+function resizeGame() {
+    // 공통 상단바가 [상단바 + 게임 카드]를 창 가운데 여백을 두고 맞춘다 (게임판 1400x820)
+    TopNav.fit(document.querySelector('.game-container'), 1400, 820);
+    // 글자 크기가 창 폭(vw)을 따라 바뀌므로, 이미 공개된 단어는 다시 맞춘다
+    document.querySelectorAll('#colorGrid .cell.revealed').forEach(fitCellWord);
+}
+window.addEventListener('resize', resizeGame);
+window.addEventListener('load', resizeGame);
+resizeGame();
+// 모바일 기기 등 뷰포트 치수가 로드 직후에는 아직 안정되지 않은 경우를 대비해 0.1초 뒤 한 번 더 실행
+setTimeout(resizeGame, 100);
+</script>
+</body>
+</html>
