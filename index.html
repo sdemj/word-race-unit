@@ -851,6 +851,10 @@
             text-shadow: 0 6px 0 rgba(0,0,0,.28), 0 12px 26px rgba(0,0,0,.35);
         }
         #pg-game .count.show { display: grid; }
+        /* 3,2,1 카운트다운 중에는 마우스 커서(화살표/손가락)가 숫자 위에 보이지 않게 숨긴다.
+           .count 는 시작 화면 전체를 덮고 있어서 여기에 cursor:none 을 주면 화면 어디서나 숨겨진다 */
+        #pg-game .start-ov:has(.count.show),
+        #pg-game .count.show { cursor: none; }
         #pg-game .count .n { display: block; animation: pop 0.8s ease both; }
 
         .htable { width: 100%; border-collapse: separate; border-spacing: 0 10px; font-size: 1.2rem; }
